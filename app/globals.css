@@ -1,0 +1,138 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-jetbrains-mono);
+  --font-heading: var(--font-geist-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  /* "LockedIn" — Disciplined Execution design system: Slate + coral. */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #e11d48;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+  --destructive: #991b1b;
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #e11d48;
+  --chart-1: #e11d48;
+  --chart-2: #f59e0b;
+  --chart-3: #991b1b;
+  --chart-4: #64748b;
+  --chart-5: #0f172a;
+  --radius: 0.5rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #e11d48;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f1f5f9;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #e11d48;
+}
+
+.dark {
+  /* Same slate + coral system as :root, rebalanced for a dark ground:
+     deep slate backgrounds, the coral primary lightened for contrast,
+     amber unchanged (already reads well dark), destructive brought to a
+     mid-saturation red that holds up both as solid-button and soft-badge text. */
+  --background: #0b1220;
+  --foreground: #e6ebf5;
+  --card: #131b2c;
+  --card-foreground: #e6ebf5;
+  --popover: #131b2c;
+  --popover-foreground: #e6ebf5;
+  --primary: #fb7185;
+  --primary-foreground: #1a0508;
+  --secondary: #1a2338;
+  --secondary-foreground: #e6ebf5;
+  --muted: #1a2338;
+  --muted-foreground: #93a1c2;
+  --accent: #1a2338;
+  --accent-foreground: #e6ebf5;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #263250;
+  --input: #263250;
+  --ring: #fb7185;
+  --chart-1: #fb7185;
+  --chart-2: #fbbf24;
+  --chart-3: #dc2626;
+  --chart-4: #93a1c2;
+  --chart-5: #e6ebf5;
+  --sidebar: #131b2c;
+  --sidebar-foreground: #e6ebf5;
+  --sidebar-primary: #fb7185;
+  --sidebar-primary-foreground: #1a0508;
+  --sidebar-accent: #1a2338;
+  --sidebar-accent-foreground: #e6ebf5;
+  --sidebar-border: #263250;
+  --sidebar-ring: #fb7185;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}

@@ -1,0 +1,320 @@
+// Local dev uses SQLite (no Docker/Postgres available on this machine).
+// SQLite has no native enum support in Prisma, so enum-like fields below
+// are `String` columns validated against the literal unions in lib/enums.ts.
+// To move to production Postgres: change `provider` to "postgresql", point
+// DATABASE_URL at a real Postgres instance, and optionally convert the
+// String enum fields back to native `enum` blocks.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  passwordHash        String
+  name                String
+  penaltyPreference   String   @default("MANDATORY_TASK") // MANDATORY_TASK | DOUBLE_WORKLOAD | SHAME_POST | FINANCIAL_STAKE (STREAK_RESET is historical-only, no longer selectable — see lib/enums.ts)
+  accountabilityEmail String?
+  currentStreak       Int      @default(0)
+  penaltyStakeAmount  Float?
+  // Lifetime total ever deducted for missed tasks (stat only — never
+  // decreases). The live spendable/deductible balance is walletBalance.
+  penaltyOwedTotal    Float    @default(0)
+  // Real, live wallet balance in Naira. Users top it up (creditWallet) and
+  // FINANCIAL_STAKE penalties actually debit it (debitWallet) — can go
+  // negative, which is the intended consequence. See lib/wallet.ts.
+  walletBalance       Float    @default(0)
+  // Best-ever currentStreak. currentStreak resets to 0 on a failed day, so
+  // streak badges (lib/badges.ts) check this instead, which never resets.
+  longestStreak       Int      @default(0)
+  reminderTimes       String   @default("[\"09:00\",\"14:00\",\"20:00\"]") // JSON array of "HH:mm"
+  onboardingComplete  Boolean  @default(false)
+  // Date (at local midnight) of the last day the EOD penalty sweep already
+  // processed for this user — makes runEodSweep idempotent if the cron
+  // route and the local worker both fire, or a sweep is retried.
+  lastSweepDate       DateTime?
+  // Lazily backfilled the first time an authenticated request hits
+  // lib/session.ts (same pattern as backfillBadgesFromHistory) — not a
+  // signup field. Used for buddy search.
+  username            String?  @unique
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  goals              Goal[]
+  dailyTasks         DailyTask[]
+  penaltyLogs        PenaltyLog[]
+  pushSubscriptions  PushSubscription[]
+  walletTransactions WalletTransaction[]
+  badges             UserBadge[]
+  recurringTaskTemplates RecurringTaskTemplate[]
+  sentBuddyInvites     BuddyInvite[]       @relation("SentBuddyInvites")
+  receivedBuddyInvites BuddyInvite[]       @relation("ReceivedBuddyInvites")
+  // Multiple simultaneous buddy connections — a user can appear as user1 or
+  // user2 across several active (unpairedAt: null) rows. lib/buddy.ts's
+  // getActiveBuddyPairs/getBuddyIds are the source of truth; there is no
+  // single-buddy scalar cache anymore.
+  buddyPairsAsUser1    BuddyPair[]         @relation("BuddyPairAsUser1")
+  buddyPairsAsUser2    BuddyPair[]         @relation("BuddyPairAsUser2")
+  proofVerifications   ProofVerification[]
+  emergencyPassUses    EmergencyPassUse[]
+  emergencyPassReviews EmergencyPassUse[]  @relation("EmergencyPassBuddy")
+  passwordResetTokens  PasswordResetToken[]
+  sentBuddyMessages     BuddyMessage[]      @relation("SentBuddyMessages")
+  receivedBuddyMessages BuddyMessage[]      @relation("ReceivedBuddyMessages")
+}
+
+model Goal {
+  id                    String    @id @default(cuid())
+  userId                String
+  title                 String
+  description           String?
+  timeframe             String // DAILY | MONTHLY | SIX_MONTHS | YEARLY
+  startDate             DateTime
+  endDate               DateTime
+  targetCompletionDate  DateTime?
+  status                String    @default("ACTIVE") // ACTIVE | COMPLETED | FAILED
+  // JSON array of {title, description} — the recurring daily action steps
+  // this goal breaks down into. Materialized into a DailyTask row per day
+  // by lib/daily-steps.ts, so a year-long goal doesn't pre-create 365 rows.
+  dailyStepTemplates    String    @default("[]")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks DailyTask[]
+
+  @@index([userId])
+}
+
+model DailyTask {
+  id            String    @id @default(cuid())
+  userId        String
+  parentGoalId  String?
+  // Which goal-breakdown step (by stable id, inside Goal.dailyStepTemplates
+  // JSON) this instance was materialized from — replaces fragile
+  // title-matching for the "already generated today" dedup check.
+  stepTemplateId String?
+  // Which RecurringTaskTemplate this instance was generated from, if any —
+  // same dedup role as stepTemplateId, for standalone recurring habits.
+  recurringTemplateId String?
+  title         String
+  description   String?
+  scheduledDate DateTime
+  status        String    @default("PENDING") // PENDING | COMPLETED | POSTPONED | FAILED_PENALIZED | EXCUSED | PENDING_APPROVAL
+  isMuted       Boolean   @default(false)
+  isPenaltyTask Boolean   @default(false)
+  // Only set for goals created with the "10 Seconds (Test)" timeframe — a
+  // precise deadline checked every second by scripts/cron-worker.ts,
+  // independent of the real midnight-based sweep, so the penalty flow can
+  // be exercised on demand.
+  testDeadline  DateTime?
+  // Set whenever "Do Later" reschedules this task — enforces at most one
+  // snooze per calendar day (see app/api/tasks/[id]/route.ts).
+  lastSnoozedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentGoal        Goal?                  @relation(fields: [parentGoalId], references: [id], onDelete: SetNull)
+  recurringTemplate RecurringTaskTemplate? @relation(fields: [recurringTemplateId], references: [id], onDelete: SetNull)
+  proofs     ProofOfWork[]
+  penaltyLogs PenaltyLog[]
+
+  @@index([userId, scheduledDate])
+  @@index([parentGoalId])
+  @@index([recurringTemplateId])
+}
+
+model ProofOfWork {
+  id          String   @id @default(cuid())
+  dailyTaskId String
+  proofType   String // IMAGE | URL | TEXT
+  proofData   String
+  submittedAt DateTime @default(now())
+
+  dailyTask     DailyTask           @relation(fields: [dailyTaskId], references: [id], onDelete: Cascade)
+  // One row per connected buddy now (multi-buddy fan-out), not a single
+  // optional row — was ProofVerification? before.
+  verifications ProofVerification[]
+
+  @@index([dailyTaskId])
+}
+
+model PenaltyLog {
+  id          String    @id @default(cuid())
+  userId      String
+  dailyTaskId String
+  penaltyType String // SHAME_POST | MANDATORY_TASK | STREAK_RESET (historical) | DOUBLE_WORKLOAD | FINANCIAL_STAKE
+  isResolved  Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyTask DailyTask @relation(fields: [dailyTaskId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([dailyTaskId])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model WalletTransaction {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String // CREDIT | DEBIT
+  amount    Float
+  reason    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeKey  String // see lib/badges.ts BADGE_CATALOG
+  earnedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeKey])
+  @@index([userId])
+}
+
+model BuddyInvite {
+  id          String    @id @default(cuid())
+  fromUserId  String
+  toUserId    String? // set for search-based requests; null until an email/link invite is claimed
+  toEmail     String? // set for email/link invites
+  inviteCode  String    @unique @default(cuid()) // used in /invite/[code]
+  status      String    @default("PENDING") // PENDING | ACCEPTED | DECLINED | CANCELED
+  createdAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  fromUser User  @relation("SentBuddyInvites", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User? @relation("ReceivedBuddyInvites", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([fromUserId])
+  @@index([toUserId])
+}
+
+model BuddyPair {
+  id         String    @id @default(cuid())
+  user1Id    String
+  user2Id    String
+  pairedAt   DateTime  @default(now())
+  unpairedAt DateTime?
+
+  user1 User @relation("BuddyPairAsUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2 User @relation("BuddyPairAsUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+
+  @@index([user1Id])
+  @@index([user2Id])
+}
+
+model ProofVerification {
+  id               String    @id @default(cuid())
+  proofOfWorkId    String
+  reviewerId       String // the buddy reviewing this proof — one row per connected buddy now
+  status           String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  rejectionReason  String?
+  // True when this proof resolves an active Mandatory Task / Double
+  // Workload penalty — approval here is what actually completes the task
+  // and clears the hard lockout (see app/api/buddy/proof/[id]/route.ts).
+  // False for ordinary advisory proof review.
+  isMandatoryResolution Boolean @default(false)
+  createdAt        DateTime  @default(now())
+  reviewedAt       DateTime?
+
+  proof    ProofOfWork @relation(fields: [proofOfWorkId], references: [id], onDelete: Cascade)
+  reviewer User        @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@unique([proofOfWorkId, reviewerId])
+  @@index([reviewerId])
+  @@index([proofOfWorkId])
+}
+
+model EmergencyPassUse {
+  id          String    @id @default(cuid())
+  userId      String
+  // Which connected buddy this specific request was sent to — required now
+  // that a user can have more than one buddy; only this buddy may respond.
+  buddyUserId String
+  dailyTaskId String
+  status      String    @default("PENDING") // PENDING | APPROVED | DECLINED
+  requestedAt DateTime  @default(now())
+  respondedAt DateTime?
+
+  user  User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  buddy User @relation("EmergencyPassBuddy", fields: [buddyUserId], references: [id], onDelete: Cascade)
+
+  @@index([userId, requestedAt])
+  @@index([buddyUserId])
+}
+
+model BuddyMessage {
+  id         String   @id @default(cuid())
+  fromUserId String
+  toUserId   String
+  message    String
+  createdAt  DateTime @default(now())
+
+  fromUser User @relation("SentBuddyMessages", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("ReceivedBuddyMessages", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([fromUserId])
+  @@index([toUserId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model RecurringTaskTemplate {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  frequency   String // DAILY | EVERY_X_DAYS | WEEKLY — see lib/schedule.ts ScheduleRule
+  intervalDays Int? // set for EVERY_X_DAYS
+  daysOfWeek  String? // JSON array of "SUN".."SAT", set for WEEKLY
+  // Day this template was created, at local midnight — EVERY_X_DAYS counts
+  // forward from here so the cadence never drifts.
+  anchorDate  DateTime
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks DailyTask[]
+
+  @@index([userId])
+}
