@@ -1,0 +1,35 @@
+name: Cron
+
+# Stand-in for scripts/cron-worker.ts in production, since Vercel's
+# serverless functions have no long-running process to host node-cron.
+# Requires two repo secrets (Settings -> Secrets and variables -> Actions):
+#   CRON_SECRET  - same value set in Vercel's env vars
+#   APP_URL      - the deployed app's base URL, e.g. https://lockedin-xxxx.vercel.app
+on:
+  schedule:
+    # EOD penalty sweep, shortly after midnight UTC (GitHub Actions cron
+    # always runs in UTC — see README for the timezone caveat this implies).
+    - cron: "5 0 * * *"
+    # Reminder push check — matches each user's configured HH:mm, so it only
+    # needs to run about this often to feel on-time.
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  eod-sweep:
+    if: github.event.schedule == '5 0 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger EOD sweep
+        run: |
+          curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/eod-sweep" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+  reminders:
+    if: github.event.schedule == '*/5 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reminder push check
+        run: |
+          curl -sf -X POST "${{ secrets.APP_URL }}/api/cron/reminders" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

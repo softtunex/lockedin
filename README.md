@@ -6,17 +6,21 @@ A strict-accountability goal tracker: daily execution, mandatory proof of work, 
 
 - Next.js (App Router, TypeScript), Tailwind CSS, shadcn/ui, lucide-react
 - NextAuth.js (Credentials, JWT sessions)
-- Prisma ORM + SQLite (local dev — no Docker/Postgres required)
-- Local filesystem proof storage (swappable, see below)
+- Prisma ORM + Postgres (Neon in production; also used for local dev — see Setup)
+- UploadThing for proof-of-work image storage
+- Resend for transactional email (password reset, buddy invites)
 - Web Push (VAPID) for reminders
-- `node-cron` local worker for the midnight penalty sweep + reminder pushes
+- `node-cron` local worker for the midnight penalty sweep + reminder pushes; a GitHub Actions workflow (`.github/workflows/cron.yml`) does the same job in production
 
 ## Setup
 
+1. Create a free Postgres database on [Neon](https://neon.tech) and copy both connection strings (pooled + direct) into `.env` as `DATABASE_URL` / `DIRECT_URL`.
+2. (Optional for local dev, required in production) Create free accounts on [Resend](https://resend.com) and [UploadThing](https://uploadthing.com) and add `RESEND_API_KEY` / `UPLOADTHING_TOKEN` to `.env`. Without these, email falls back to a console.log stub and image proof uploads will fail (URL/text proof still work).
+3. Install and run:
+
 ```bash
 npm install
-npx prisma migrate dev   # creates prisma/dev.db and applies migrations
-npm run dev               # http://localhost:3001
+npm run dev   # runs `prisma generate && prisma migrate deploy` first, then http://localhost:3001
 ```
 
 (Runs on 3001, not the usual 3000 — avoids a port clash with other local projects. Change the `-p` flag in `package.json`'s `dev`/`start` scripts and `NEXTAUTH_URL` in `.env` together if you want a different port.)
@@ -27,7 +31,7 @@ In a second terminal, run the background worker (midnight penalty sweep + schedu
 npm run worker
 ```
 
-`.env` is already populated with generated `NEXTAUTH_SECRET`, `CRON_SECRET`, and VAPID keys for local dev. If you ever need to regenerate them:
+`.env` needs `NEXTAUTH_SECRET`, `CRON_SECRET`, and VAPID keys generated once:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"   # NEXTAUTH_SECRET / CRON_SECRET
@@ -35,6 +39,14 @@ npx web-push generate-vapid-keys                                              # 
 ```
 
 If you change `VAPID_PUBLIC_KEY`, mirror it into `NEXT_PUBLIC_VAPID_PUBLIC_KEY` — the client needs it to subscribe.
+
+## Deploying (Vercel + Neon + Resend + UploadThing, all free tier)
+
+1. **Neon**: create a project, grab the pooled and direct connection strings.
+2. **Resend**: create an API key. Works immediately from `onboarding@resend.dev` with no domain setup; verify a custom domain later if you want mail to come from your own address.
+3. **UploadThing**: create an app, copy the `UPLOADTHING_TOKEN` value from its dashboard.
+4. **Vercel**: import the repo, set the env vars listed in `.env.example` (`DATABASE_URL`, `DIRECT_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL` — fill this in after the first deploy gives you a URL, `RESEND_API_KEY`, `UPLOADTHING_TOKEN`, `VAPID_*`, `CRON_SECRET`), deploy. The build runs `prisma migrate deploy` automatically, so the database schema is applied on every deploy.
+5. **GitHub Actions cron**: add two repo secrets — `CRON_SECRET` (same value as Vercel) and `APP_URL` (your Vercel URL). `.github/workflows/cron.yml` then hits `/api/cron/eod-sweep` daily and `/api/cron/reminders` every 5 minutes, standing in for `npm run worker` since Vercel's serverless functions can't host a long-running cron process.
 
 ## How it fits together
 

@@ -1,6 +1,6 @@
 // Pure data — safe to import from client components (toast copy) as well
 // as server code (lib/badges.ts). Must never import lib/prisma.ts here:
-// that pulls the better-sqlite3 native binding into the client bundle.
+// that pulls the pg client into the client bundle.
 export type BadgeKey =
   | "FIRST_TASK"
   | "TASKS_10"

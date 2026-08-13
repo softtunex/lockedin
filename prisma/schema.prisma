@@ -1,9 +1,10 @@
-// Local dev uses SQLite (no Docker/Postgres available on this machine).
-// SQLite has no native enum support in Prisma, so enum-like fields below
-// are `String` columns validated against the literal unions in lib/enums.ts.
-// To move to production Postgres: change `provider` to "postgresql", point
-// DATABASE_URL at a real Postgres instance, and optionally convert the
-// String enum fields back to native `enum` blocks.
+// Postgres (Neon) in production and local dev alike — see lib/prisma.ts
+// (runtime, via DATABASE_URL/pooled) and prisma.config.ts (CLI/migrate, via
+// DIRECT_URL). Enum-like fields below are still plain `String` columns
+// validated against the literal unions in lib/enums.ts rather than native
+// Postgres `enum` blocks — carried over from this project's original SQLite
+// setup (which has no enum support at all) and left as-is since lib/enums.ts
+// is already the single source of truth either way.
 
 generator client {
   provider = "prisma-client"
@@ -11,7 +12,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 model User {

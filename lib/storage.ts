@@ -1,14 +1,10 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { UTApi } from "uploadthing/server";
 
-// Local filesystem stub for proof-of-work images. Swap this file for an
-// Uploadthing (or Supabase Storage / Cloudinary) implementation in
-// production — callers only depend on `saveProofFile` returning a URL and
-// `getProofFileAbsolutePath` resolving one back to disk, so no other code
-// needs to change.
-const UPLOAD_ROOT = path.join(process.cwd(), "storage", "uploads");
-const PUBLIC_PREFIX = "/api/uploads";
+// Reads UPLOADTHING_TOKEN from the environment automatically. Callers only
+// depend on `saveProofFile` returning a URL — the file itself now lives on
+// UploadThing's CDN, not this server, so nothing else needs to change.
+const utapi = new UTApi();
 
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 const MAX_BYTES = 8 * 1024 * 1024; // 8MB
@@ -21,18 +17,13 @@ export async function saveProofFile(userId: string, file: File): Promise<string>
     throw new Error("File is too large (max 8MB).");
   }
 
-  const userDir = path.join(UPLOAD_ROOT, userId);
-  await mkdir(userDir, { recursive: true });
-
   const ext = file.type.split("/")[1] ?? "bin";
-  const filename = `${randomUUID()}.${ext}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(path.join(userDir, filename), buffer);
+  const named = new File([file], `${userId}-${randomUUID()}.${ext}`, { type: file.type });
 
-  return `${PUBLIC_PREFIX}/${userId}/${filename}`;
-}
+  const result = await utapi.uploadFiles(named);
+  if (result.error) {
+    throw new Error(`Upload failed: ${result.error.message}`);
+  }
 
-export function resolveProofFilePath(segments: string[]): string {
-  const safeSegments = segments.filter((s) => s !== ".." && s !== "." && s.length > 0);
-  return path.join(UPLOAD_ROOT, ...safeSegments);
+  return result.data.ufsUrl;
 }
