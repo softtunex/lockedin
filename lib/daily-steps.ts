@@ -3,20 +3,43 @@ import { todayStart, todayEnd, dayStart } from "./date";
 import { SINGLE_TASK_TIMEFRAMES } from "./enums";
 import { isScheduledOn, type ScheduleRule } from "./schedule";
 
-export type StepTemplate = { id: string; title: string; description?: string; schedule: ScheduleRule };
+export type StepTemplate = {
+  id: string;
+  title: string;
+  description?: string;
+  schedule: ScheduleRule;
+  // Duration — bounds within which the step's schedule applies. Both
+  // optional ("yyyy-MM-dd"); an unset bound falls back to the goal's own
+  // start/end date, which is already enforced by the goal-level query in
+  // ensureTodayStepsForActiveGoals.
+  startDate?: string;
+  endDate?: string;
+  // Informational "HH:mm" carried onto each materialized DailyTask's
+  // dueTime — display-only, doesn't change the day-granular deadline.
+  timeOfDay?: string;
+};
 
 // Goals created before scheduled steps existed have templates stored as
 // plain { title, description } JSON, with no id/schedule. Backfill both
 // deterministically (id from title, so dedup stays stable across calls)
 // rather than migrating the JSON blob — schedule defaults to DAILY, which
 // matches their implicit behavior before this feature existed.
-function normalizeStepTemplate(raw: Partial<StepTemplate> & { title: string }): StepTemplate {
+export function normalizeStepTemplate(raw: Partial<StepTemplate> & { title: string }): StepTemplate {
   return {
     id: raw.id ?? `legacy:${raw.title}`,
     title: raw.title,
     description: raw.description,
     schedule: raw.schedule ?? { frequency: "DAILY" },
+    startDate: raw.startDate,
+    endDate: raw.endDate,
+    timeOfDay: raw.timeOfDay,
   };
+}
+
+function isDue(template: StepTemplate, date: Date): boolean {
+  if (template.startDate && dayStart(date) < dayStart(template.startDate)) return false;
+  if (template.endDate && dayStart(date) > dayStart(template.endDate)) return false;
+  return isScheduledOn(template.schedule, date);
 }
 
 // Long-term goals store their recurring daily action steps as JSON templates
@@ -24,8 +47,10 @@ function normalizeStepTemplate(raw: Partial<StepTemplate> & { title: string }): 
 // every day between start and end. This materializes today's row for each
 // template the first time it's needed (goal creation, or the next dashboard
 // load on a new day) — idempotent, safe to call repeatedly. Only templates
-// whose schedule is due today are materialized (e.g. a Mon/Wed/Fri step
-// stays absent from Today's Execution List on a Tuesday).
+// whose schedule is due today (and within their own start/end duration, if
+// set) are materialized — e.g. a Mon/Wed/Fri step stays absent from Today's
+// Execution List on a Tuesday, and a step with an endDate stops
+// materializing after it.
 export async function ensureTodayStepsForActiveGoals(userId: string): Promise<void> {
   const today = todayStart();
 
@@ -43,7 +68,7 @@ export async function ensureTodayStepsForActiveGoals(userId: string): Promise<vo
     const templates = (JSON.parse(goal.dailyStepTemplates || "[]") as StepTemplate[]).map(normalizeStepTemplate);
     if (templates.length === 0) continue;
 
-    const dueToday = templates.filter((t) => isScheduledOn(t.schedule, today));
+    const dueToday = templates.filter((t) => isDue(t, today));
     if (dueToday.length === 0) continue;
 
     // A step is still "in flight" if it has any PENDING/POSTPONED task,
@@ -69,6 +94,7 @@ export async function ensureTodayStepsForActiveGoals(userId: string): Promise<vo
         stepTemplateId: t.id,
         title: t.title,
         description: t.description,
+        dueTime: t.timeOfDay,
         scheduledDate: today,
       })),
     });
@@ -81,7 +107,7 @@ export async function materializeStepsForGoalToday(
   templates: StepTemplate[],
   scheduledDate: Date = todayStart(),
 ): Promise<void> {
-  const dueToday = templates.filter((t) => isScheduledOn(t.schedule, scheduledDate));
+  const dueToday = templates.filter((t) => isDue(t, scheduledDate));
   if (dueToday.length === 0) return;
   await prisma.dailyTask.createMany({
     data: dueToday.map((t) => ({
@@ -90,6 +116,7 @@ export async function materializeStepsForGoalToday(
       stepTemplateId: t.id,
       title: t.title,
       description: t.description,
+      dueTime: t.timeOfDay,
       scheduledDate: dayStart(scheduledDate),
     })),
   });

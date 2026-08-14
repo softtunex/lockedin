@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { DateLabel } from "@/components/ui/date-label";
 import { Spinner } from "@/components/ui/spinner";
 import { Stepper } from "@/components/goals/stepper";
@@ -18,7 +19,17 @@ import { BADGE_CATALOG, type BadgeKey } from "@/lib/badge-catalog";
 import { RepeatPicker } from "@/components/shared/repeat-picker";
 import type { ScheduleRule } from "@/lib/schedule";
 
-type Step = { id: string; title: string; description: string; schedule: ScheduleRule };
+type Step = {
+  id: string;
+  title: string;
+  description: string;
+  schedule: ScheduleRule;
+  // Duration bounds — unset means "whenever the goal itself runs."
+  startDate?: string;
+  endDate?: string;
+  // Informational due time, display-only.
+  timeOfDay?: string;
+};
 
 function newStep(): Step {
   return { id: crypto.randomUUID(), title: "", description: "", schedule: { frequency: "DAILY" } };
@@ -63,7 +74,11 @@ export function GoalWizard() {
     setEndDate(defaultEndDate(value, new Date(startDate)));
   }
 
-  function updateStep(index: number, field: "title" | "description", value: string) {
+  function updateStepField<K extends "title" | "description" | "startDate" | "endDate" | "timeOfDay">(
+    index: number,
+    field: K,
+    value: Step[K],
+  ) {
     setSteps((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)));
   }
 
@@ -79,7 +94,15 @@ export function GoalWizard() {
     setSteps((prev) => prev.filter((_, i) => i !== index));
   }
 
-  const cleanedSteps = steps.map((s) => ({ ...s, title: s.title.trim() })).filter((s) => s.title.length > 0);
+  const cleanedSteps = steps
+    .map((s) => ({
+      ...s,
+      title: s.title.trim(),
+      startDate: s.startDate || undefined,
+      endDate: s.endDate || undefined,
+      timeOfDay: s.timeOfDay || undefined,
+    }))
+    .filter((s) => s.title.length > 0);
 
   function goNext() {
     if (step === 1 && title.trim().length === 0) {
@@ -238,18 +261,46 @@ export function GoalWizard() {
                     <Input
                       placeholder={`Step ${i + 1} title, e.g. "Write 500 words"`}
                       value={s.title}
-                      onChange={(e) => updateStep(i, "title", e.target.value)}
+                      onChange={(e) => updateStepField(i, "title", e.target.value)}
                     />
                     <Input
                       placeholder="Optional details"
                       value={s.description}
-                      onChange={(e) => updateStep(i, "description", e.target.value)}
+                      onChange={(e) => updateStepField(i, "description", e.target.value)}
                     />
                     <RepeatPicker
                       value={s.schedule}
                       onChange={(schedule) => updateStepSchedule(i, schedule ?? { frequency: "DAILY" })}
                       anchorDate={todayStr}
                     />
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <DateLabel
+                        id={`step-${s.id}-start`}
+                        label="Starts (optional)"
+                        value={s.startDate ?? ""}
+                        onChange={(v) => updateStepField(i, "startDate", v)}
+                        min={startDate}
+                      />
+                      <DateLabel
+                        id={`step-${s.id}-end`}
+                        label="Ends (optional)"
+                        value={s.endDate ?? ""}
+                        onChange={(v) => updateStepField(i, "endDate", v)}
+                        min={s.startDate || startDate}
+                      />
+                      <div className="space-y-2">
+                        <Label htmlFor={`step-${s.id}-time`}>Due time (optional)</Label>
+                        <Input
+                          id={`step-${s.id}-time`}
+                          type="time"
+                          value={s.timeOfDay ?? ""}
+                          onChange={(e) => updateStepField(i, "timeOfDay", e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Leave Starts/Ends blank to run for this goal&apos;s whole window ({format(new Date(startDate), "MMM d")} &rarr; {format(new Date(endDate), "MMM d")}).
+                    </p>
                   </div>
                   {steps.length > 1 && (
                     <Button

@@ -28,3 +28,13 @@ export function msUntilMidnight(): number {
   midnight.setHours(24, 0, 0, 0);
   return midnight.getTime() - now.getTime();
 }
+
+// How long after creation a task/goal can still be outright deleted (as
+// opposed to just edited/postponed) — long enough to undo a typo or
+// duplicate, short enough that it can't be used to dodge a day's
+// accountability by deleting a task hours after creating it.
+export const DELETE_GRACE_PERIOD_MS = 10 * 60 * 1000;
+
+export function isWithinDeleteWindow(createdAt: Date): boolean {
+  return Date.now() - createdAt.getTime() <= DELETE_GRACE_PERIOD_MS;
+}

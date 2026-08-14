@@ -28,11 +28,19 @@ export async function POST(request: Request) {
   });
 
   if (toUserId) {
+    const recipient = await prisma.user.findUnique({ where: { id: toUserId }, select: { email: true } });
     await sendPushToUser(toUserId, {
       title: "LockedIn Buddy Request",
       body: `${sender?.name} wants to be your accountability partner.`,
       url: "/buddy",
     });
+    if (recipient?.email) {
+      await sendEmail({
+        to: recipient.email,
+        subject: `${sender?.name} invited you to be their accountability partner`,
+        body: `${sender?.name} wants to pair up on LockedIn. Open the app and check your Buddy Hub to accept: ${process.env.NEXTAUTH_URL}/buddy`,
+      });
+    }
   } else if (toEmail) {
     await sendEmail({
       to: toEmail,

@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { Trash2 } from "lucide-react";
+import { isWithinDeleteWindow } from "@/lib/date";
 import type { TaskWithProofs } from "./task-list";
 
 export function EditTaskModal({
@@ -21,15 +23,20 @@ export function EditTaskModal({
   open,
   onOpenChange,
   onSaved,
+  onDeleted,
 }: {
   task: TaskWithProofs | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: (task: TaskWithProofs) => void;
+  onDeleted: (taskId: string) => void;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const canDelete = Boolean(task) && !task!.isPenaltyTask && isWithinDeleteWindow(new Date(task!.createdAt));
 
   useEffect(() => {
     if (task) {
@@ -58,6 +65,22 @@ export function EditTaskModal({
     onOpenChange(false);
   }
 
+  async function handleDelete() {
+    if (!task) return;
+    setDeleting(true);
+    const res = await fetch(`/api/tasks/${task.id}`, { method: "DELETE" });
+    setDeleting(false);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error ?? "Failed to delete task");
+      return;
+    }
+
+    onDeleted(task.id);
+    onOpenChange(false);
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -78,10 +101,20 @@ export function EditTaskModal({
             />
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex-col gap-2 sm:flex-col">
           <Button onClick={handleSave} disabled={saving} className="w-full">
             {saving && <Spinner />} {saving ? "Saving..." : "Save changes"}
           </Button>
+          {canDelete && (
+            <Button
+              onClick={handleDelete}
+              disabled={deleting}
+              variant="destructive-solid"
+              className="w-full"
+            >
+              {deleting ? <Spinner /> : <Trash2 className="h-4 w-4" />} {deleting ? "Deleting..." : "Delete task"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

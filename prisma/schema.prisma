@@ -106,6 +106,10 @@ model DailyTask {
   recurringTemplateId String?
   title         String
   description   String?
+  // Informational "HH:mm" carried over from a goal step's timeOfDay
+  // (lib/daily-steps.ts) or a recurring task template — display-only, does
+  // not change the day-granular deadline/penalty timing.
+  dueTime       String?
   scheduledDate DateTime
   status        String    @default("PENDING") // PENDING | COMPLETED | POSTPONED | FAILED_PENALIZED | EXCUSED | PENDING_APPROVAL
   isMuted       Boolean   @default(false)

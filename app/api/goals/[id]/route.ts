@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { safeJson } from "@/lib/api";
+import { isWithinDeleteWindow } from "@/lib/date";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -42,6 +43,10 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const { id } = await params;
   const existing = await prisma.goal.findFirst({ where: { id, userId: session.user.id } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (!isWithinDeleteWindow(existing.createdAt)) {
+    return NextResponse.json({ error: "This goal is more than 10 minutes old and can no longer be deleted." }, { status: 403 });
+  }
 
   await prisma.goal.delete({ where: { id } });
   return NextResponse.json({ ok: true });

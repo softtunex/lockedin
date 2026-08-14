@@ -26,3 +26,25 @@ export function isScheduledOn(rule: ScheduleRule, date: Date): boolean {
       return rule.daysOfWeek.includes(WEEKDAY_CODES[getDay(date)]);
   }
 }
+
+const WEEKDAY_SHORT: Record<WeekdayCode, string> = {
+  SUN: "Sun",
+  MON: "Mon",
+  TUE: "Tue",
+  WED: "Wed",
+  THU: "Thu",
+  FRI: "Fri",
+  SAT: "Sat",
+};
+
+// Human-readable summary for display (goal detail page, review screens).
+export function describeSchedule(rule: ScheduleRule): string {
+  switch (rule.frequency) {
+    case "DAILY":
+      return "Every day";
+    case "EVERY_X_DAYS":
+      return `Every ${rule.intervalDays} day${rule.intervalDays === 1 ? "" : "s"}`;
+    case "WEEKLY":
+      return rule.daysOfWeek.map((d) => WEEKDAY_SHORT[d]).join(", ") || "Specific days";
+  }
+}

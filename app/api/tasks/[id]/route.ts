@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { taskUpdateSchema } from "@/lib/validations";
-import { dayStart } from "@/lib/date";
+import { dayStart, isWithinDeleteWindow } from "@/lib/date";
 import { safeJson } from "@/lib/api";
 import { getUnresolvedMandatoryPenalty } from "@/lib/session";
 
@@ -46,4 +46,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const task = await prisma.dailyTask.update({ where: { id }, data });
   return NextResponse.json(task);
+}
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const existing = await prisma.dailyTask.findFirst({ where: { id, userId: session.user.id } });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Never deletable, regardless of the window — this is the task whose
+  // completion clears the hard lockout (see lib/session.ts's
+  // getUnresolvedMandatoryPenalty); deleting it would bypass that entirely.
+  if (existing.isPenaltyTask) {
+    return NextResponse.json({ error: "Penalty tasks can't be deleted." }, { status: 403 });
+  }
+  if (!isWithinDeleteWindow(existing.createdAt)) {
+    return NextResponse.json({ error: "This task is more than 10 minutes old and can no longer be deleted." }, { status: 403 });
+  }
+
+  await prisma.dailyTask.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
 }

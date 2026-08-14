@@ -156,6 +156,12 @@ export function TaskList({ initialTasks, locked = false }: { initialTasks: TaskW
                       {task.parentGoal.title}
                     </span>
                   )}
+                  {task.dueTime && (
+                    <span className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
+                      <Clock3 className="h-3 w-3" />
+                      Due {task.dueTime}
+                    </span>
+                  )}
                   {isFailed && (
                     <span className="rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
                       Failed day
@@ -253,6 +259,7 @@ export function TaskList({ initialTasks, locked = false }: { initialTasks: TaskW
         open={!!editTask}
         onOpenChange={(o) => !o && setEditTask(null)}
         onSaved={updateTask}
+        onDeleted={removeTask}
       />
       <SnoozeModal
         task={snoozeTask}

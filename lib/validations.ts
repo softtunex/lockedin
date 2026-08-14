@@ -59,7 +59,17 @@ export const dailyStepInputSchema = z.object({
   title: z.string().min(1, "Step title is required"),
   description: z.string().optional(),
   schedule: scheduleRuleSchema.default({ frequency: "DAILY" }),
+  // Duration bounds — when this step's schedule applies. Unset defaults to
+  // the goal's own start/end date.
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  // Informational due time ("HH:mm"), display-only.
+  timeOfDay: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/).optional(),
 });
+
+// Same shape, without `id` — used to append a step to an already-created
+// goal (the server assigns a fresh id, see app/api/goals/[id]/steps/route.ts).
+export const addGoalStepSchema = dailyStepInputSchema.omit({ id: true });
 
 export const goalCreateSchema = z.object({
   title: z.string().min(1, "Title is required").max(140),
