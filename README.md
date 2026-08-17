@@ -20,10 +20,10 @@ A strict-accountability goal tracker: daily execution, mandatory proof of work, 
 
 ```bash
 npm install
-npm run dev   # runs `prisma generate && prisma migrate deploy` first, then http://localhost:3001
+npm run dev   # runs `prisma generate && prisma migrate deploy` first, then http://localhost:3005
 ```
 
-(Runs on 3001, not the usual 3000 — avoids a port clash with other local projects. Change the `-p` flag in `package.json`'s `dev`/`start` scripts and `NEXTAUTH_URL` in `.env` together if you want a different port.)
+(Runs on 3005, not the usual 3000 — avoids a port clash with other local projects. Change the `-p` flag in `package.json`'s `dev`/`start` scripts and `NEXTAUTH_URL` in `.env` together if you want a different port.)
 
 In a second terminal, run the background worker (midnight penalty sweep + scheduled reminder pushes):
 
