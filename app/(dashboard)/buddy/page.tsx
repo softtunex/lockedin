@@ -8,6 +8,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { BuddySearch } from "@/components/buddy/buddy-search";
 import { PendingRequests } from "@/components/buddy/pending-requests";
 import { ProofReviewCard } from "@/components/buddy/proof-review-card";
+import { AssignPenaltyTaskCard } from "@/components/buddy/assign-penalty-task-card";
 import { EmergencyPassReviewCard } from "@/components/buddy/emergency-pass-review-card";
 import { RequestEmergencyPass } from "@/components/buddy/request-emergency-pass";
 import { EmergencyPassInfo } from "@/components/buddy/emergency-pass-info";
@@ -59,7 +60,7 @@ export default async function BuddyPage() {
 
   const buddyDetails = await Promise.all(
     buddyIds.map(async (buddyId) => {
-      const [buddy, pendingProofReviews, pendingPassRequests, buddyTasksToday, buddyPendingTasks, messages] =
+      const [buddy, pendingProofReviews, pendingPassRequests, buddyTasksToday, buddyPendingTasks, messages, pendingAssignments] =
         await Promise.all([
           prisma.user.findUnique({ where: { id: buddyId }, select: { name: true, currentStreak: true, longestStreak: true } }),
           prisma.proofVerification.findMany({
@@ -88,6 +89,10 @@ export default async function BuddyPage() {
             orderBy: { createdAt: "desc" },
             take: 10,
           }),
+          prisma.dailyTask.findMany({
+            where: { userId: buddyId, isPenaltyTask: true, status: "PENDING_ASSIGNMENT" },
+            select: { id: true },
+          }),
         ]);
 
       const passTargets = await prisma.dailyTask.findMany({
@@ -107,6 +112,7 @@ export default async function BuddyPage() {
         buddyPendingTasks,
         messages,
         taskTitleById,
+        pendingAssignments,
       };
     }),
   );
@@ -115,7 +121,7 @@ export default async function BuddyPage() {
     id: b.id,
     name: b.name,
     currentStreak: b.currentStreak,
-    pendingCount: b.pendingProofReviews.length + b.pendingPassRequests.length,
+    pendingCount: b.pendingProofReviews.length + b.pendingPassRequests.length + b.pendingAssignments.length,
   }));
 
   const panels: Record<string, React.ReactNode> = {};
@@ -158,6 +164,17 @@ export default async function BuddyPage() {
             )}
           </div>
         </div>
+
+        {b.pendingAssignments.length > 0 && (
+          <div>
+            <h3 className="mb-3 text-sm font-medium text-muted-foreground">Penalty tasks to assign</h3>
+            <div className="space-y-2">
+              {b.pendingAssignments.map((t) => (
+                <AssignPenaltyTaskCard key={t.id} taskId={t.id} buddyName={b.name} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {b.pendingProofReviews.length > 0 && (
           <div>

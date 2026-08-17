@@ -4,6 +4,7 @@ import { PENALTY_TASK_BANK, type PenaltyType } from "./enums";
 import { debitWallet, creditWallet } from "./wallet";
 import { checkAndAwardBadges } from "./badges";
 import { notifyBuddyOfFailure, getBuddyIds } from "./buddy";
+import { sendPushToUser } from "./push";
 import { addDays } from "date-fns";
 import type { User } from "@/generated/prisma/client";
 
@@ -109,8 +110,7 @@ export async function penalizeTaskNow(dailyTaskId: string): Promise<void> {
 }
 
 // Creates one randomized mandatory penalty task + its unresolved PenaltyLog.
-// Shared by MANDATORY_TASK (once) and DOUBLE_WORKLOAD (twice) — both are
-// subject to the same hard lockout + buddy-approval gate (see
+// Subject to the hard lockout + buddy-approval gate (see
 // app/api/tasks/[id]/proof/route.ts and lib/session.ts's
 // getUnresolvedMandatoryPenalty, which checks penaltyType: "MANDATORY_TASK"
 // regardless of which preference created the log).
@@ -129,6 +129,36 @@ async function createMandatoryPenaltyTask(userId: string) {
   });
 }
 
+// Creates a placeholder penalty task with no real content yet, and its
+// unresolved PenaltyLog (logged as "MANDATORY_TASK" so the same lockout gate
+// applies) — a connected buddy has to personally write the task before the
+// user can act on it at all (see app/api/buddy/penalty-task/[id]/assign).
+async function createBuddyAssignedPenaltyTask(userId: string, userName: string) {
+  const penaltyTask = await prisma.dailyTask.create({
+    data: {
+      userId,
+      title: "Waiting for your buddy to assign your penalty task",
+      scheduledDate: todayStart(),
+      isPenaltyTask: true,
+      status: "PENDING_ASSIGNMENT",
+    },
+  });
+  await prisma.penaltyLog.create({
+    data: { userId, dailyTaskId: penaltyTask.id, penaltyType: "MANDATORY_TASK", isResolved: false },
+  });
+
+  const buddyIds = await getBuddyIds(userId);
+  await Promise.all(
+    buddyIds.map((buddyId) =>
+      sendPushToUser(buddyId, {
+        title: "Assign a penalty task",
+        body: `${userName} missed a task — write their penalty task to hold them accountable.`,
+        url: "/buddy",
+      }),
+    ),
+  );
+}
+
 async function applyPenalty(
   user: Pick<User, "id" | "name">,
   dailyTaskId: string,
@@ -142,11 +172,8 @@ async function applyPenalty(
       await createMandatoryPenaltyTask(userId);
       break;
     }
-    case "DOUBLE_WORKLOAD": {
-      // Penalty stacking: 2 mandatory tasks instead of 1 — both need buddy
-      // approval before the account unlocks again.
-      await createMandatoryPenaltyTask(userId);
-      await createMandatoryPenaltyTask(userId);
+    case "BUDDY_ASSIGNED_TASK": {
+      await createBuddyAssignedPenaltyTask(userId, user.name);
       break;
     }
     case "FINANCIAL_STAKE": {

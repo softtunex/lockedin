@@ -14,14 +14,10 @@ export default async function OnboardingPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight">Set your terms</h1>
         <p className="mt-1 text-muted-foreground">
-          Choose what happens when you don&apos;t follow through, and when you want to be reminded.
+          Choose what happens when you don&apos;t follow through.
         </p>
       </div>
-      <OnboardingForm
-        defaultReminderTimes={JSON.parse(user.reminderTimes) as string[]}
-        defaultWalletBalance={user.walletBalance}
-        nextPath="/onboarding/buddy"
-      />
+      <OnboardingForm defaultWalletBalance={user.walletBalance} nextPath="/onboarding/buddy" />
     </div>
   );
 }

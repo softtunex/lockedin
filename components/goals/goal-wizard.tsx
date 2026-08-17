@@ -23,16 +23,19 @@ type Step = {
   id: string;
   title: string;
   description: string;
-  schedule: ScheduleRule;
-  // Duration bounds — unset means "whenever the goal itself runs."
-  startDate?: string;
+  // null = does not repeat (a single occurrence on startDate).
+  schedule: ScheduleRule | null;
+  // The date this step starts applying from — and, for a does-not-repeat
+  // step, the exact date it occurs on.
+  startDate: string;
+  // Stops recurring after this date. Unset means "whenever the goal ends."
   endDate?: string;
-  // Informational due time, display-only.
-  timeOfDay?: string;
+  // "HH:mm" — when set, sends a push notification at this time.
+  notificationTime?: string;
 };
 
-function newStep(): Step {
-  return { id: crypto.randomUUID(), title: "", description: "", schedule: { frequency: "DAILY" } };
+function newStep(startDate: string): Step {
+  return { id: crypto.randomUUID(), title: "", description: "", schedule: { frequency: "DAILY" }, startDate };
 }
 
 function defaultEndDate(timeframe: Timeframe, start: Date): string {
@@ -62,7 +65,7 @@ export function GoalWizard() {
   const [timeframe, setTimeframe] = useState<Timeframe>("MONTHLY");
   const [startDate, setStartDate] = useState(todayStr);
   const [endDate, setEndDate] = useState(defaultEndDate("MONTHLY", today));
-  const [steps, setSteps] = useState<Step[]>([newStep()]);
+  const [steps, setSteps] = useState<Step[]>([newStep(todayStr)]);
   const [submitting, setSubmitting] = useState(false);
 
   const needsBreakdown = !isSingleTaskTimeframe(timeframe);
@@ -74,7 +77,7 @@ export function GoalWizard() {
     setEndDate(defaultEndDate(value, new Date(startDate)));
   }
 
-  function updateStepField<K extends "title" | "description" | "startDate" | "endDate" | "timeOfDay">(
+  function updateStepField<K extends "title" | "description" | "startDate" | "endDate" | "notificationTime">(
     index: number,
     field: K,
     value: Step[K],
@@ -82,12 +85,12 @@ export function GoalWizard() {
     setSteps((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)));
   }
 
-  function updateStepSchedule(index: number, schedule: ScheduleRule) {
+  function updateStepSchedule(index: number, schedule: ScheduleRule | null) {
     setSteps((prev) => prev.map((s, i) => (i === index ? { ...s, schedule } : s)));
   }
 
   function addStep() {
-    setSteps((prev) => [...prev, newStep()]);
+    setSteps((prev) => [...prev, newStep(startDate)]);
   }
 
   function removeStep(index: number) {
@@ -98,9 +101,8 @@ export function GoalWizard() {
     .map((s) => ({
       ...s,
       title: s.title.trim(),
-      startDate: s.startDate || undefined,
       endDate: s.endDate || undefined,
-      timeOfDay: s.timeOfDay || undefined,
+      notificationTime: s.notificationTime || undefined,
     }))
     .filter((s) => s.title.length > 0);
 
@@ -270,36 +272,41 @@ export function GoalWizard() {
                     />
                     <RepeatPicker
                       value={s.schedule}
-                      onChange={(schedule) => updateStepSchedule(i, schedule ?? { frequency: "DAILY" })}
-                      anchorDate={todayStr}
+                      onChange={(schedule) => updateStepSchedule(i, schedule)}
+                      allowOnce
+                      anchorDate={s.startDate}
                     />
                     <div className="grid gap-3 sm:grid-cols-3">
                       <DateLabel
                         id={`step-${s.id}-start`}
-                        label="Starts (optional)"
-                        value={s.startDate ?? ""}
+                        label={s.schedule === null ? "Date" : "Starts"}
+                        value={s.startDate}
                         onChange={(v) => updateStepField(i, "startDate", v)}
                         min={startDate}
                       />
-                      <DateLabel
-                        id={`step-${s.id}-end`}
-                        label="Ends (optional)"
-                        value={s.endDate ?? ""}
-                        onChange={(v) => updateStepField(i, "endDate", v)}
-                        min={s.startDate || startDate}
-                      />
+                      {s.schedule !== null && (
+                        <DateLabel
+                          id={`step-${s.id}-end`}
+                          label="Ends (optional)"
+                          value={s.endDate ?? ""}
+                          onChange={(v) => updateStepField(i, "endDate", v)}
+                          min={s.startDate}
+                        />
+                      )}
                       <div className="space-y-2">
-                        <Label htmlFor={`step-${s.id}-time`}>Due time (optional)</Label>
+                        <Label htmlFor={`step-${s.id}-time`}>Notification time (optional)</Label>
                         <Input
                           id={`step-${s.id}-time`}
                           type="time"
-                          value={s.timeOfDay ?? ""}
-                          onChange={(e) => updateStepField(i, "timeOfDay", e.target.value)}
+                          value={s.notificationTime ?? ""}
+                          onChange={(e) => updateStepField(i, "notificationTime", e.target.value)}
                         />
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Leave Starts/Ends blank to run for this goal&apos;s whole window ({format(new Date(startDate), "MMM d")} &rarr; {format(new Date(endDate), "MMM d")}).
+                      {s.schedule === null
+                        ? "This step happens once, on the date above."
+                        : `Leave Ends blank to run through this goal's own end date (${format(new Date(endDate), "MMM d")}).`}
                     </p>
                   </div>
                   {steps.length > 1 && (

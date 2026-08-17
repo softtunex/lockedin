@@ -18,7 +18,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { formatNaira } from "@/lib/currency";
 
 export function OnboardingForm({
-  defaultReminderTimes,
   defaultPenaltyPreference = "MANDATORY_TASK",
   defaultAccountabilityEmail = "",
   defaultPenaltyStakeAmount = "500",
@@ -26,7 +25,6 @@ export function OnboardingForm({
   mode = "onboarding",
   nextPath = "/dashboard",
 }: {
-  defaultReminderTimes: string[];
   defaultPenaltyPreference?: SelectablePenaltyPreference;
   defaultAccountabilityEmail?: string;
   defaultPenaltyStakeAmount?: string;
@@ -40,27 +38,9 @@ export function OnboardingForm({
   const [penaltyStakeAmount, setPenaltyStakeAmount] = useState(defaultPenaltyStakeAmount);
   const shortfall = Math.max(0, Number(defaultPenaltyStakeAmount) - defaultWalletBalance);
   const [walletTopUp, setWalletTopUp] = useState(String(shortfall));
-  const [reminderTimes, setReminderTimes] = useState<string[]>(defaultReminderTimes);
-  const [newTime, setNewTime] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  function addReminderTime() {
-    if (!newTime) return;
-    if (reminderTimes.includes(newTime)) return;
-    setReminderTimes([...reminderTimes, newTime].sort());
-    setNewTime("");
-  }
-
-  function removeReminderTime(time: string) {
-    setReminderTimes(reminderTimes.filter((t) => t !== time));
-  }
-
   async function handleSubmit() {
-    if (reminderTimes.length === 0) {
-      toast.error("Add at least one reminder time");
-      return;
-    }
-
     setSubmitting(true);
     const res = await fetch("/api/onboarding", {
       method: "POST",
@@ -70,7 +50,6 @@ export function OnboardingForm({
         accountabilityEmail,
         penaltyStakeAmount: Number(penaltyStakeAmount) || undefined,
         walletTopUp: Number(walletTopUp) || 0,
-        reminderTimes,
       }),
     });
     setSubmitting(false);
@@ -183,34 +162,9 @@ export function OnboardingForm({
         </section>
       )}
 
-      <section>
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-          When should we nudge you?
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          {reminderTimes.map((time) => (
-            <span
-              key={time}
-              className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-sm"
-            >
-              {time}
-              <button
-                type="button"
-                onClick={() => removeReminderTime(time)}
-                className="relative text-muted-foreground before:absolute before:-inset-2.5 before:content-[''] hover:text-foreground"
-                aria-label={`Remove ${time}`}
-              >
-                &times;
-              </button>
-            </span>
-          ))}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} className="h-11 w-40 sm:h-8" />
-          <Button type="button" variant="secondary" className="h-11 sm:h-8" onClick={addReminderTime}>
-            Add time
-          </Button>
-        </div>
+      <section className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2.5 text-sm text-muted-foreground">
+        Reminders are set per task now — pick a notification time when you create a task or goal step, instead of
+        a fixed daily schedule here.
       </section>
 
       <Button className="w-full" onClick={handleSubmit} disabled={submitting}>

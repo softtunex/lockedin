@@ -19,10 +19,10 @@ export function AddGoalStepForm({ goalId, goalStartDate, goalEndDate }: { goalId
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [schedule, setSchedule] = useState<ScheduleRule>({ frequency: "DAILY" });
-  const [startDate, setStartDate] = useState("");
+  const [schedule, setSchedule] = useState<ScheduleRule | null>({ frequency: "DAILY" });
+  const [startDate, setStartDate] = useState(todayStr);
   const [endDate, setEndDate] = useState("");
-  const [timeOfDay, setTimeOfDay] = useState("");
+  const [notificationTime, setNotificationTime] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function submit() {
@@ -38,9 +38,9 @@ export function AddGoalStepForm({ goalId, goalStartDate, goalEndDate }: { goalId
         title: title.trim(),
         description: description.trim() || undefined,
         schedule,
-        startDate: startDate || undefined,
+        startDate,
         endDate: endDate || undefined,
-        timeOfDay: timeOfDay || undefined,
+        notificationTime: notificationTime || undefined,
       }),
     });
     setSubmitting(false);
@@ -55,9 +55,9 @@ export function AddGoalStepForm({ goalId, goalStartDate, goalEndDate }: { goalId
     setTitle("");
     setDescription("");
     setSchedule({ frequency: "DAILY" });
-    setStartDate("");
+    setStartDate(todayStr);
     setEndDate("");
-    setTimeOfDay("");
+    setNotificationTime("");
     setOpen(false);
     router.refresh();
   }
@@ -74,17 +74,27 @@ export function AddGoalStepForm({ goalId, goalStartDate, goalEndDate }: { goalId
     <div className="space-y-3 rounded-lg border border-border p-4">
       <Input placeholder='Step title, e.g. "Write 500 words"' value={title} onChange={(e) => setTitle(e.target.value)} />
       <Input placeholder="Optional details" value={description} onChange={(e) => setDescription(e.target.value)} />
-      <RepeatPicker value={schedule} onChange={(s) => setSchedule(s ?? { frequency: "DAILY" })} anchorDate={todayStr} />
+      <RepeatPicker value={schedule} onChange={setSchedule} allowOnce anchorDate={startDate} />
       <div className="grid gap-3 sm:grid-cols-3">
-        <DateLabel id="new-step-start" label="Starts (optional)" value={startDate} onChange={setStartDate} min={goalStartDate} />
-        <DateLabel id="new-step-end" label="Ends (optional)" value={endDate} onChange={setEndDate} min={startDate || goalStartDate} />
+        <DateLabel
+          id="new-step-start"
+          label={schedule === null ? "Date" : "Starts"}
+          value={startDate}
+          onChange={setStartDate}
+          min={goalStartDate}
+        />
+        {schedule !== null && (
+          <DateLabel id="new-step-end" label="Ends (optional)" value={endDate} onChange={setEndDate} min={startDate} />
+        )}
         <div className="space-y-2">
-          <Label htmlFor="new-step-time">Due time (optional)</Label>
-          <Input id="new-step-time" type="time" value={timeOfDay} onChange={(e) => setTimeOfDay(e.target.value)} />
+          <Label htmlFor="new-step-time">Notification time (optional)</Label>
+          <Input id="new-step-time" type="time" value={notificationTime} onChange={(e) => setNotificationTime(e.target.value)} />
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        Leave Starts/Ends blank to run for the rest of this goal&apos;s window (through {format(new Date(goalEndDate), "MMM d, yyyy")}).
+        {schedule === null
+          ? "This step happens once, on the date above."
+          : `Leave Ends blank to run through this goal's own end date (${format(new Date(goalEndDate), "MMM d, yyyy")}).`}
       </p>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)} disabled={submitting}>

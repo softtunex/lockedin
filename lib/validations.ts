@@ -51,20 +51,26 @@ export const onboardingSchema = z.object({
   // enable Financial Stake during onboarding, before the Settings wallet
   // panel exists in their world yet.
   walletTopUp: z.coerce.number().min(0).optional(),
-  reminderTimes: z.array(z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/)).min(1),
 });
+
+const notificationTimeSchema = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/);
 
 export const dailyStepInputSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1, "Step title is required"),
   description: z.string().optional(),
-  schedule: scheduleRuleSchema.default({ frequency: "DAILY" }),
-  // Duration bounds — when this step's schedule applies. Unset defaults to
-  // the goal's own start/end date.
+  // null = does not repeat (a single occurrence on startDate).
+  schedule: scheduleRuleSchema.nullable().default({ frequency: "DAILY" }),
+  // The date this step starts applying from — and, for a does-not-repeat
+  // step, the exact date it occurs on. Defaults to today server-side if
+  // omitted.
   startDate: z.string().optional(),
+  // Stops materializing after this date. Unset means "whenever the goal
+  // itself ends."
   endDate: z.string().optional(),
-  // Informational due time ("HH:mm"), display-only.
-  timeOfDay: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/).optional(),
+  // "HH:mm" — when set, this step's materialized task gets a push
+  // notification at this time (see lib/push.ts).
+  notificationTime: notificationTimeSchema.optional(),
 });
 
 // Same shape, without `id` — used to append a step to an already-created
@@ -94,12 +100,18 @@ export const taskCreateSchema = z.object({
   description: z.string().optional(),
   scheduledDate: z.string(),
   parentGoalId: z.string().optional(),
+  // "HH:mm" — when set, this task gets a push notification at this time.
+  dueTime: notificationTimeSchema.optional(),
 });
 
 export const recurringTaskCreateSchema = z.object({
   title: z.string().min(1).max(140),
   description: z.string().optional(),
   schedule: scheduleRuleSchema,
+  // Date this recurrence starts counting from. Defaults to today
+  // server-side if omitted.
+  startDate: z.string().optional(),
+  notificationTime: notificationTimeSchema.optional(),
 });
 
 export const taskUpdateSchema = z.object({
@@ -129,6 +141,11 @@ export const buddyRequestSchema = z
 
 export const buddyInviteActionSchema = z.object({
   action: z.enum(["accept", "decline"]),
+});
+
+export const assignPenaltyTaskSchema = z.object({
+  title: z.string().min(1, "Give the task a title").max(140),
+  description: z.string().optional(),
 });
 
 export const buddyProofActionSchema = z

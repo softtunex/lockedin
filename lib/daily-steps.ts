@@ -7,16 +7,19 @@ export type StepTemplate = {
   id: string;
   title: string;
   description?: string;
-  schedule: ScheduleRule;
-  // Duration — bounds within which the step's schedule applies. Both
-  // optional ("yyyy-MM-dd"); an unset bound falls back to the goal's own
-  // start/end date, which is already enforced by the goal-level query in
-  // ensureTodayStepsForActiveGoals.
+  // null means "does not repeat" — a single occurrence on startDate only.
+  schedule: ScheduleRule | null;
+  // The date this step starts applying from, and (for ONCE) the exact date
+  // it occurs on. Optional only for pre-existing templates created before
+  // this was a required field — normalizeStepTemplate never fabricates one.
   startDate?: string;
+  // Stops materializing after this date. Unset means "whenever the goal
+  // itself ends."
   endDate?: string;
-  // Informational "HH:mm" carried onto each materialized DailyTask's
-  // dueTime — display-only, doesn't change the day-granular deadline.
-  timeOfDay?: string;
+  // "HH:mm" — carried onto each materialized DailyTask's dueTime, which is
+  // what actually triggers that occurrence's push reminder (see
+  // lib/push.ts). Optional — no time set means no reminder for this step.
+  notificationTime?: string;
 };
 
 // Goals created before scheduled steps existed have templates stored as
@@ -29,16 +32,19 @@ export function normalizeStepTemplate(raw: Partial<StepTemplate> & { title: stri
     id: raw.id ?? `legacy:${raw.title}`,
     title: raw.title,
     description: raw.description,
-    schedule: raw.schedule ?? { frequency: "DAILY" },
+    schedule: raw.schedule === undefined ? { frequency: "DAILY" } : raw.schedule,
     startDate: raw.startDate,
     endDate: raw.endDate,
-    timeOfDay: raw.timeOfDay,
+    notificationTime: raw.notificationTime,
   };
 }
 
 function isDue(template: StepTemplate, date: Date): boolean {
   if (template.startDate && dayStart(date) < dayStart(template.startDate)) return false;
   if (template.endDate && dayStart(date) > dayStart(template.endDate)) return false;
+  if (template.schedule === null) {
+    return Boolean(template.startDate) && dayStart(date).getTime() === dayStart(template.startDate!).getTime();
+  }
   return isScheduledOn(template.schedule, date);
 }
 
@@ -47,10 +53,8 @@ function isDue(template: StepTemplate, date: Date): boolean {
 // every day between start and end. This materializes today's row for each
 // template the first time it's needed (goal creation, or the next dashboard
 // load on a new day) — idempotent, safe to call repeatedly. Only templates
-// whose schedule is due today (and within their own start/end duration, if
-// set) are materialized — e.g. a Mon/Wed/Fri step stays absent from Today's
-// Execution List on a Tuesday, and a step with an endDate stops
-// materializing after it.
+// due today (per their schedule, start/end bounds, and — for a
+// does-not-repeat step — an exact date match) are materialized.
 export async function ensureTodayStepsForActiveGoals(userId: string): Promise<void> {
   const today = todayStart();
 
@@ -94,7 +98,7 @@ export async function ensureTodayStepsForActiveGoals(userId: string): Promise<vo
         stepTemplateId: t.id,
         title: t.title,
         description: t.description,
-        dueTime: t.timeOfDay,
+        dueTime: t.notificationTime,
         scheduledDate: today,
       })),
     });
@@ -116,7 +120,7 @@ export async function materializeStepsForGoalToday(
       stepTemplateId: t.id,
       title: t.title,
       description: t.description,
-      dueTime: t.timeOfDay,
+      dueTime: t.notificationTime,
       scheduledDate: dayStart(scheduledDate),
     })),
   });

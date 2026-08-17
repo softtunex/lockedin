@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const { penaltyPreference, accountabilityEmail, penaltyStakeAmount, walletTopUp, reminderTimes } = parsed.data;
+  const { penaltyPreference, accountabilityEmail, penaltyStakeAmount, walletTopUp } = parsed.data;
 
   const stakeAmount = penaltyStakeAmount ?? 500;
 
@@ -50,7 +50,6 @@ export async function POST(request: Request) {
       penaltyPreference,
       accountabilityEmail: accountabilityEmail || null,
       penaltyStakeAmount: penaltyPreference === "FINANCIAL_STAKE" ? stakeAmount : null,
-      reminderTimes: JSON.stringify(reminderTimes),
       onboardingComplete: true,
     },
   });

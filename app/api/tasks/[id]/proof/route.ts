@@ -15,6 +15,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const task = await prisma.dailyTask.findFirst({ where: { id, userId: session.user.id } });
   if (!task) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (task.status === "PENDING_ASSIGNMENT") {
+    return NextResponse.json({ error: "Waiting for your buddy to assign this task first." }, { status: 400 });
+  }
 
   const contentType = request.headers.get("content-type") ?? "";
   let proofType: string;

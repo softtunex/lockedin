@@ -6,7 +6,7 @@ import { ensureTodayStepsForActiveGoals } from "@/lib/daily-steps";
 import { ensureTodayTasksForRecurringTemplates } from "@/lib/recurring-tasks";
 import { todayStart, todayEnd } from "@/lib/date";
 import { MidnightCountdown } from "@/components/dashboard/midnight-countdown";
-import { AddTaskForm } from "@/components/dashboard/add-task-form";
+import { AddTaskModal } from "@/components/dashboard/add-task-modal";
 import { TaskList, type TaskWithProofs } from "@/components/dashboard/task-list";
 import { MomentumPanel } from "@/components/dashboard/momentum-panel";
 import { DailyProtocolCard } from "@/components/dashboard/daily-protocol-card";
@@ -56,7 +56,7 @@ export default async function DashboardPage() {
             </span>
           </div>
 
-          <AddTaskForm locked={locked} />
+          <AddTaskModal locked={locked} />
           <TaskList initialTasks={tasks} locked={locked} />
         </div>
 

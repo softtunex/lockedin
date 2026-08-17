@@ -38,7 +38,9 @@ const WEEKDAY_SHORT: Record<WeekdayCode, string> = {
 };
 
 // Human-readable summary for display (goal detail page, review screens).
-export function describeSchedule(rule: ScheduleRule): string {
+// null (does-not-repeat) reads as "Once".
+export function describeSchedule(rule: ScheduleRule | null): string {
+  if (rule === null) return "Once";
   switch (rule.frequency) {
     case "DAILY":
       return "Every day";

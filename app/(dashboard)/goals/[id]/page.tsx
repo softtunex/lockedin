@@ -89,9 +89,9 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
                     <span className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5">
                       <Repeat className="h-3 w-3" /> {describeSchedule(t.schedule)}
                     </span>
-                    {t.timeOfDay && (
+                    {t.notificationTime && (
                       <span className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5">
-                        <Clock3 className="h-3 w-3" /> Due {t.timeOfDay}
+                        <Clock3 className="h-3 w-3" /> Notify {t.notificationTime}
                       </span>
                     )}
                     {(t.startDate || t.endDate) && (

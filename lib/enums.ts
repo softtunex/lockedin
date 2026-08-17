@@ -25,15 +25,27 @@ export const TASK_STATUSES = [
   "FAILED_PENALIZED",
   "EXCUSED",
   "PENDING_APPROVAL",
+  // A Buddy-Assigned penalty task exists but has no real content yet — the
+  // buddy hasn't written it. Not proof-submittable until they do (see
+  // app/api/buddy/penalty-task/[id]/assign/route.ts).
+  "PENDING_ASSIGNMENT",
 ] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export const PROOF_TYPES = ["IMAGE", "URL", "TEXT"] as const;
 export type ProofType = (typeof PROOF_TYPES)[number];
 
-// Full historical union — includes STREAK_RESET even though it's no longer
-// selectable, so old PenaltyLog rows and labels still render correctly.
-export const PENALTY_TYPES = ["SHAME_POST", "MANDATORY_TASK", "STREAK_RESET", "DOUBLE_WORKLOAD", "FINANCIAL_STAKE"] as const;
+// Full historical union — includes STREAK_RESET and DOUBLE_WORKLOAD even
+// though neither is selectable anymore, so old PenaltyLog rows and labels
+// still render correctly.
+export const PENALTY_TYPES = [
+  "SHAME_POST",
+  "MANDATORY_TASK",
+  "STREAK_RESET",
+  "DOUBLE_WORKLOAD",
+  "BUDDY_ASSIGNED_TASK",
+  "FINANCIAL_STAKE",
+] as const;
 export type PenaltyType = (typeof PENALTY_TYPES)[number];
 
 // The 4 penalty preferences a user can actually choose in onboarding/settings,
@@ -41,7 +53,7 @@ export type PenaltyType = (typeof PENALTY_TYPES)[number];
 // app-wide now (see lib/penalty-engine.ts), so it's deliberately excluded here.
 export const SELECTABLE_PENALTY_PREFERENCES = [
   "MANDATORY_TASK",
-  "DOUBLE_WORKLOAD",
+  "BUDDY_ASSIGNED_TASK",
   "SHAME_POST",
   "FINANCIAL_STAKE",
 ] as const;
@@ -61,6 +73,7 @@ export const PENALTY_LABELS: Record<PenaltyType, string> = {
   MANDATORY_TASK: "Mandatory Penalty Task",
   STREAK_RESET: "Streak Death",
   DOUBLE_WORKLOAD: "Double Workload (Penalty Stacking)",
+  BUDDY_ASSIGNED_TASK: "Buddy-Assigned Penalty Task",
   FINANCIAL_STAKE: "Financial Stake",
 };
 
@@ -71,6 +84,8 @@ export const PENALTY_DESCRIPTIONS: Record<PenaltyType, string> = {
   STREAK_RESET: "Your current streak resets to zero and a Failed Day badge appears in your history.",
   DOUBLE_WORKLOAD:
     "Tomorrow you're assigned 2 mandatory penalty tasks instead of 1 — both need buddy approval before the app unlocks.",
+  BUDDY_ASSIGNED_TASK:
+    "You're hard-locked out of the app until your buddy personally writes you a penalty task, you complete it with proof, and they approve it.",
   FINANCIAL_STAKE: "Your configured stake amount is deducted from your wallet balance in real time — it can go negative.",
 };
 

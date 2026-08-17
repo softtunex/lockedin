@@ -6,7 +6,7 @@ import { addGoalStepSchema } from "@/lib/validations";
 import { safeJson } from "@/lib/api";
 import { isSingleTaskTimeframe } from "@/lib/enums";
 import { materializeStepsForGoalToday, type StepTemplate } from "@/lib/daily-steps";
-import { todayStart } from "@/lib/date";
+import { todayStart, dateKey } from "@/lib/date";
 
 // Appends a new recurring step to an already-created goal — only while the
 // goal is still ACTIVE and its duration hasn't ended, matching how the
@@ -32,7 +32,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const newStep: StepTemplate = { id: randomUUID(), ...parsed.data };
+  const newStep: StepTemplate = { id: randomUUID(), ...parsed.data, startDate: parsed.data.startDate ?? dateKey(todayStart()) };
   const templates = JSON.parse(goal.dailyStepTemplates || "[]") as StepTemplate[];
   templates.push(newStep);
 

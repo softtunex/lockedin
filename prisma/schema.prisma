@@ -311,9 +311,14 @@ model RecurringTaskTemplate {
   frequency   String // DAILY | EVERY_X_DAYS | WEEKLY — see lib/schedule.ts ScheduleRule
   intervalDays Int? // set for EVERY_X_DAYS
   daysOfWeek  String? // JSON array of "SUN".."SAT", set for WEEKLY
-  // Day this template was created, at local midnight — EVERY_X_DAYS counts
-  // forward from here so the cadence never drifts.
+  // Day this recurrence starts counting from (user-chosen, defaults to
+  // today) — EVERY_X_DAYS counts forward from here so the cadence never
+  // drifts, and DAILY/WEEKLY never materialize before it.
   anchorDate  DateTime
+  // "HH:mm" — carried onto each materialized DailyTask's dueTime, which is
+  // what actually triggers that occurrence's push reminder (see
+  // lib/push.ts). Optional — no time set means no reminder for this habit.
+  notificationTime String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

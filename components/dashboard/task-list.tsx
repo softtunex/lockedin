@@ -105,7 +105,8 @@ export function TaskList({ initialTasks, locked = false }: { initialTasks: TaskW
       {sortedTasks.map((task) => {
         const isDone = task.status === "COMPLETED";
         const isFailed = task.status === "FAILED_PENALIZED";
-        const isActionable = !isDone && !isFailed;
+        const isPendingAssignment = task.status === "PENDING_ASSIGNMENT";
+        const isActionable = !isDone && !isFailed && !isPendingAssignment;
         const alreadySnoozedToday = Boolean(task.lastSnoozedAt) && isSameDay(new Date(task.lastSnoozedAt!), new Date());
         const proof = task.proofs[0];
 
@@ -116,20 +117,22 @@ export function TaskList({ initialTasks, locked = false }: { initialTasks: TaskW
               "border-l-4 border-border/50 shadow-sm transition-shadow hover:shadow-md",
               isFailed && "border-l-destructive bg-destructive/5",
               isDone && "border-l-amber-500 bg-amber-500/5",
+              isPendingAssignment && "border-l-amber-500/50 bg-amber-500/5",
               isActionable && "border-l-primary",
             )}
           >
             <CardContent className="flex flex-wrap items-start gap-3 p-4">
               <button
                 type="button"
-                disabled={isDone || isFailed}
+                disabled={isDone || isFailed || isPendingAssignment}
                 onClick={() => setProofTask(task)}
-                aria-label={isDone ? "Completed" : "Mark as done"}
+                aria-label={isDone ? "Completed" : isPendingAssignment ? "Waiting for buddy to assign" : "Mark as done"}
                 className={cn(
                   "relative mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors before:absolute before:-inset-3 before:content-['']",
                   isDone && "animate-in zoom-in-50 duration-300 border-amber-500 bg-amber-500 text-white",
                   isFailed && "border-destructive/50",
-                  !isDone && !isFailed && "border-muted-foreground/40 hover:border-primary",
+                  isPendingAssignment && "border-amber-500/40",
+                  isActionable && "border-muted-foreground/40 hover:border-primary",
                 )}
               >
                 {isDone && <Check className="h-3 w-3" />}
@@ -150,6 +153,11 @@ export function TaskList({ initialTasks, locked = false }: { initialTasks: TaskW
                       Penalty task
                     </span>
                   )}
+                  {isPendingAssignment && (
+                    <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                      Waiting for buddy to assign
+                    </span>
+                  )}
                   {task.parentGoal && (
                     <span className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
                       <Target className="h-3 w-3" />
@@ -159,7 +167,7 @@ export function TaskList({ initialTasks, locked = false }: { initialTasks: TaskW
                   {task.dueTime && (
                     <span className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
                       <Clock3 className="h-3 w-3" />
-                      Due {task.dueTime}
+                      Notify {task.dueTime}
                     </span>
                   )}
                   {isFailed && (

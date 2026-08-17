@@ -38,30 +38,34 @@ export async function sendPushToUser(userId: string, payload: { title: string; b
   );
 }
 
+// Per-task reminders — each task/step carries its own optional
+// notification time (DailyTask.dueTime, "HH:mm") set at creation, rather
+// than a blanket set of times configured once for the whole account. A
+// task with no dueTime set just never reminds. Matches the current minute
+// against every still-pending task scheduled for today whose dueTime is
+// now, and sends one task-specific push per match.
 export async function sendPendingTaskReminders(referenceDate: Date = new Date()) {
   if (!ensureConfigured()) return;
 
   const hhmm = `${String(referenceDate.getHours()).padStart(2, "0")}:${String(referenceDate.getMinutes()).padStart(2, "0")}`;
 
-  const users = await prisma.user.findMany({ where: { onboardingComplete: true } });
   const dayStart = new Date(referenceDate);
   dayStart.setHours(0, 0, 0, 0);
   const dayEnd = new Date(referenceDate);
   dayEnd.setHours(23, 59, 59, 999);
 
-  for (const user of users) {
-    const reminderTimes = JSON.parse(user.reminderTimes || "[]") as string[];
-    if (!reminderTimes.includes(hhmm)) continue;
+  const dueTasks = await prisma.dailyTask.findMany({
+    where: {
+      dueTime: hhmm,
+      status: { in: ["PENDING", "POSTPONED"] },
+      scheduledDate: { gte: dayStart, lte: dayEnd },
+    },
+  });
 
-    const pendingCount = await prisma.dailyTask.count({
-      where: { userId: user.id, scheduledDate: { gte: dayStart, lte: dayEnd }, status: "PENDING" },
-    });
-
-    if (pendingCount === 0) continue;
-
-    await sendPushToUser(user.id, {
-      title: "LockedIn Alert",
-      body: `You still have ${pendingCount} pending task${pendingCount === 1 ? "" : "s"} today. Don't risk the penalty!`,
+  for (const task of dueTasks) {
+    await sendPushToUser(task.userId, {
+      title: "LockedIn Reminder",
+      body: `"${task.title}" is due — don't risk the penalty!`,
       url: "/dashboard",
     });
   }

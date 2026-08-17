@@ -5,7 +5,7 @@ import { goalCreateSchema } from "@/lib/validations";
 import { materializeStepsForGoalToday } from "@/lib/daily-steps";
 import { getUnresolvedMandatoryPenalty, getWalletDeficit } from "@/lib/session";
 import { formatNaira } from "@/lib/currency";
-import { dayStart, todayStart } from "@/lib/date";
+import { dayStart, todayStart, dateKey } from "@/lib/date";
 import { safeJson } from "@/lib/api";
 import { checkAndAwardBadges } from "@/lib/badges";
 
@@ -51,7 +51,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const { title, description, timeframe, startDate, endDate, targetCompletionDate, dailySteps } = parsed.data;
+  const { title, description, timeframe, startDate, endDate, targetCompletionDate } = parsed.data;
+  const dailySteps = parsed.data.dailySteps.map((s) => ({ ...s, startDate: s.startDate ?? dateKey(dayStart(startDate)) }));
 
   const goal = await prisma.goal.create({
     data: {

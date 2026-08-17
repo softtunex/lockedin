@@ -13,7 +13,7 @@ export async function ensureTodayTasksForRecurringTemplates(userId: string): Pro
   const today = todayStart();
 
   const templates = await prisma.recurringTaskTemplate.findMany({
-    where: { userId, isActive: true },
+    where: { userId, isActive: true, anchorDate: { lte: today } },
   });
 
   const dueToday = templates.filter((t) => isScheduledOn(templateToScheduleRule(t), today));
@@ -34,6 +34,7 @@ export async function ensureTodayTasksForRecurringTemplates(userId: string): Pro
       recurringTemplateId: t.id,
       title: t.title,
       description: t.description,
+      dueTime: t.notificationTime,
       scheduledDate: today,
     })),
   });

@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recurringTaskCreateSchema } from "@/lib/validations";
 import { safeJson } from "@/lib/api";
-import { todayStart } from "@/lib/date";
+import { dayStart } from "@/lib/date";
 import { getUnresolvedMandatoryPenalty } from "@/lib/session";
 import { ensureTodayTasksForRecurringTemplates } from "@/lib/recurring-tasks";
 
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const { title, description, schedule } = parsed.data;
+  const { title, description, schedule, startDate, notificationTime } = parsed.data;
 
   const template = await prisma.recurringTaskTemplate.create({
     data: {
@@ -35,7 +35,8 @@ export async function POST(request: Request) {
       frequency: schedule.frequency,
       intervalDays: schedule.frequency === "EVERY_X_DAYS" ? schedule.intervalDays : undefined,
       daysOfWeek: schedule.frequency === "WEEKLY" ? JSON.stringify(schedule.daysOfWeek) : undefined,
-      anchorDate: todayStart(),
+      anchorDate: startDate ? dayStart(startDate) : dayStart(new Date()),
+      notificationTime,
     },
   });
 

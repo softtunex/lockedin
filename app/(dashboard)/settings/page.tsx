@@ -94,10 +94,9 @@ export default async function SettingsPage({
       </div>
 
       <div>
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Terms &amp; reminder times</h2>
+        <h2 className="mb-3 text-sm font-medium text-muted-foreground">Terms</h2>
         <OnboardingForm
           mode="settings"
-          defaultReminderTimes={JSON.parse(user.reminderTimes) as string[]}
           defaultPenaltyPreference={user.penaltyPreference as SelectablePenaltyPreference}
           defaultAccountabilityEmail={user.accountabilityEmail ?? ""}
           defaultPenaltyStakeAmount={String(user.penaltyStakeAmount ?? 500)}

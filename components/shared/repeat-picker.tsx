@@ -25,8 +25,8 @@ const MODE_LABELS: Record<Mode, string> = {
 };
 
 // `value: null` means "does not repeat" — only meaningful when `allowOnce`
-// is true (the standalone Add Task form). Goal-wizard steps always recur,
-// so they never pass allowOnce and never see a null value.
+// is true (the standalone Add Task modal and goal steps, both of which now
+// support a one-off occurrence on a specific date).
 export function RepeatPicker({
   value,
   onChange,
