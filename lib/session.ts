@@ -2,14 +2,6 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export async function getCurrentUser() {
-  const session = await auth();
-  if (!session?.user?.id) return null;
-  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
-  if (!user) return null;
-  return user.username ? user : ensureUsername(user);
-}
-
 // Lazily backfills User.username for accounts created before buddy search
 // existed — same idempotent-cheap-check pattern as backfillBadgesFromHistory.
 async function ensureUsername<T extends { id: string; name: string }>(user: T) {
@@ -30,9 +22,20 @@ async function ensureUsername<T extends { id: string; name: string }>(user: T) {
 }
 
 export async function requireUser() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  return user;
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+
+  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+  if (!user) {
+    // The session JWT is valid but its userId is gone from the DB (e.g. a
+    // DB reset/migration under an already-logged-in browser). Route through
+    // clear-session instead of straight to /login — otherwise the stale
+    // cookie makes proxy.ts think this browser is logged in and bounces it
+    // right back off of /login, looping forever.
+    redirect("/api/auth/clear-session");
+  }
+
+  return user.username ? user : ensureUsername(user);
 }
 
 export async function requireOnboardedUser() {
