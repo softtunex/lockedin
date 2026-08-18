@@ -5,11 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { requireOnboardedUser } from "@/lib/session";
 import { type DayStatus } from "@/components/history/heatmap-calendar";
 import { HistoryViewToggle } from "@/components/history/history-view-toggle";
-import { GoalProgressBar } from "@/components/goals/goal-progress-bar";
+import { GoalCard } from "@/components/goals/goal-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { TIMEFRAME_LABELS, SINGLE_TASK_TIMEFRAMES, type Timeframe } from "@/lib/enums";
+import { SINGLE_TASK_TIMEFRAMES } from "@/lib/enums";
 import { todayStart } from "@/lib/date";
 
 export const metadata: Metadata = { title: "History" };
@@ -113,22 +113,9 @@ export default async function HistoryPage({
         <div>
           <h2 className="mb-3 text-sm font-medium text-muted-foreground">Long-term goal progress</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            {activeGoals.map((goal) => {
-              const completed = goal.tasks.filter((t) => t.status === "COMPLETED").length;
-              return (
-                <Card key={goal.id} className="border-border/50 shadow-sm">
-                  <CardContent className="space-y-2 p-4">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">{goal.title}</p>
-                      <span className="text-xs text-muted-foreground">
-                        {TIMEFRAME_LABELS[goal.timeframe as Timeframe]}
-                      </span>
-                    </div>
-                    <GoalProgressBar completed={completed} total={goal.tasks.length} />
-                  </CardContent>
-                </Card>
-              );
-            })}
+            {activeGoals.map((goal) => (
+              <GoalCard key={goal.id} goal={goal} variant="row" />
+            ))}
           </div>
         </div>
       )}

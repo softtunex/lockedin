@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
-import { isSameDay } from "date-fns";
+import { isSameDay, format } from "date-fns";
 import type { DailyTask, ProofOfWork, Goal } from "@/generated/prisma/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -57,7 +57,23 @@ function TestDeadlineBadge({ deadline, onExpire }: { deadline: Date; onExpire: (
   );
 }
 
-export function TaskList({ initialTasks, locked = false }: { initialTasks: TaskWithProofs[]; locked?: boolean }) {
+export function TaskList({
+  initialTasks,
+  locked = false,
+  showDate = false,
+  variant,
+  emptyMessage = "Nothing scheduled for today. Add a task or create a goal.",
+}: {
+  initialTasks: TaskWithProofs[];
+  locked?: boolean;
+  // Shows a "MMM d" date badge on each task — useful outside the Today
+  // bucket, where the date isn't implicit from context.
+  showDate?: boolean;
+  // "overdue" additionally shows a destructive "Overdue" pill on
+  // PENDING/POSTPONED tasks. Only meaningful together with showDate.
+  variant?: "overdue" | "upcoming";
+  emptyMessage?: string;
+}) {
   const router = useRouter();
   const [tasks, setTasks] = useState(initialTasks);
   // The dashboard/goal-detail/penalty-lock pages that render this are
@@ -85,9 +101,7 @@ export function TaskList({ initialTasks, locked = false }: { initialTasks: TaskW
   if (tasks.length === 0) {
     return (
       <Card>
-        <CardContent className="p-8 text-center text-muted-foreground">
-          Nothing scheduled for today. Add a task or create a goal.
-        </CardContent>
+        <CardContent className="p-8 text-center text-muted-foreground">{emptyMessage}</CardContent>
       </Card>
     );
   }
@@ -109,6 +123,7 @@ export function TaskList({ initialTasks, locked = false }: { initialTasks: TaskW
         const isActionable = !isDone && !isFailed && !isPendingAssignment;
         const alreadySnoozedToday = Boolean(task.lastSnoozedAt) && isSameDay(new Date(task.lastSnoozedAt!), new Date());
         const proof = task.proofs[0];
+        const isOverdue = variant === "overdue" && (task.status === "PENDING" || task.status === "POSTPONED");
 
         return (
           <Card
@@ -162,6 +177,16 @@ export function TaskList({ initialTasks, locked = false }: { initialTasks: TaskW
                     <span className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
                       <Target className="h-3 w-3" />
                       {task.parentGoal.title}
+                    </span>
+                  )}
+                  {showDate && (
+                    <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
+                      {format(new Date(task.scheduledDate), "MMM d")}
+                    </span>
+                  )}
+                  {isOverdue && (
+                    <span className="rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
+                      Overdue
                     </span>
                   )}
                   {task.dueTime && (

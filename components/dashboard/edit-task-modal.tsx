@@ -33,6 +33,7 @@ export function EditTaskModal({
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [notificationTime, setNotificationTime] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -42,6 +43,7 @@ export function EditTaskModal({
     if (task) {
       setTitle(task.title);
       setDescription(task.description ?? "");
+      setNotificationTime(task.dueTime ?? "");
     }
   }, [task]);
 
@@ -51,7 +53,7 @@ export function EditTaskModal({
     const res = await fetch(`/api/tasks/${task.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, description }),
+      body: JSON.stringify({ title, description, dueTime: notificationTime }),
     });
     setSaving(false);
 
@@ -98,6 +100,15 @@ export function EditTaskModal({
               id="edit-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-notification-time">Notification time</Label>
+            <Input
+              id="edit-notification-time"
+              type="time"
+              value={notificationTime}
+              onChange={(e) => setNotificationTime(e.target.value)}
             />
           </div>
         </div>

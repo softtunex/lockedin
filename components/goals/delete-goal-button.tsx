@@ -29,7 +29,7 @@ export function DeleteGoalButton({ goalId }: { goalId: string }) {
     }
 
     toast.success("Goal deleted");
-    router.push("/goals");
+    router.push("/dashboard");
     router.refresh();
   }
 

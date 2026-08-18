@@ -20,13 +20,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const { title, description, status, scheduledDate } = parsed.data;
+  const { title, description, status, scheduledDate, dueTime } = parsed.data;
 
   // Snoozing ("Do Later") only makes sense from PENDING and always clears
   // any penalty/mute state on the task since it's being actively rescheduled.
   const data: Record<string, unknown> = {};
   if (title !== undefined) data.title = title;
   if (description !== undefined) data.description = description;
+  if (dueTime !== undefined) data.dueTime = dueTime || null;
   if (scheduledDate !== undefined) {
     const blockingPenalty = await getUnresolvedMandatoryPenalty(session.user.id);
     if (blockingPenalty) {

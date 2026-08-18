@@ -14,7 +14,6 @@ import { cn } from "@/lib/utils";
 import { useMsUntilMidnight, formatCountdown } from "@/lib/use-midnight-countdown";
 import {
   LayoutDashboard,
-  Target,
   CalendarDays,
   Users,
   HeartHandshake,
@@ -27,7 +26,6 @@ import {
 
 const LINKS = [
   { href: "/dashboard", label: "Today", icon: LayoutDashboard },
-  { href: "/goals", label: "Goals", icon: Target },
   { href: "/history", label: "History", icon: CalendarDays },
   { href: "/feed", label: "Feed", icon: Users },
   { href: "/buddy", label: "Buddy", icon: HeartHandshake },
@@ -36,7 +34,6 @@ const LINKS = [
 
 const TAB_LINKS = [
   { href: "/dashboard", label: "Today", icon: LayoutDashboard },
-  { href: "/goals", label: "Goals", icon: Target },
   { href: "/buddy", label: "Buddy", icon: HeartHandshake },
   { href: "/history", label: "History", icon: CalendarDays },
   { href: "/settings", label: "Settings", icon: Settings },

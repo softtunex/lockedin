@@ -159,7 +159,7 @@ export function GoalWizard() {
       const badge = BADGE_CATALOG[key as BadgeKey];
       if (badge) toast(`🏅 Badge earned: ${badge.label}`, { description: badge.description });
     }
-    router.push("/goals");
+    router.push("/dashboard");
     router.refresh();
   }
 

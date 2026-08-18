@@ -119,6 +119,8 @@ export const taskUpdateSchema = z.object({
   description: z.string().optional(),
   status: z.enum(TASK_STATUSES).optional(),
   scheduledDate: z.string().optional(),
+  // Accepts "" to explicitly clear an existing notification time.
+  dueTime: z.union([notificationTimeSchema, z.literal("")]).optional(),
 });
 
 export const proofSubmitSchema = z.object({
