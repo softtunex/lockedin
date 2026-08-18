@@ -5,6 +5,7 @@ import { taskUpdateSchema } from "@/lib/validations";
 import { dayStart, isWithinDeleteWindow } from "@/lib/date";
 import { safeJson } from "@/lib/api";
 import { getUnresolvedMandatoryPenalty } from "@/lib/session";
+import { checkAndAwardBadges } from "@/lib/badges";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -43,10 +44,30 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     data.status = "POSTPONED";
     data.lastSnoozedAt = new Date();
   }
-  if (status !== undefined) data.status = status;
+  // Completing a task with no proof required — normal (proof-required)
+  // completion only ever happens through app/api/tasks/[id]/proof/route.ts;
+  // this path exists specifically for tasks created with proofRequired:false
+  // (see components/dashboard/task-list.tsx's checkbox handler).
+  let newBadges: string[] = [];
+  if (status === "COMPLETED" && scheduledDate === undefined) {
+    if (existing.proofRequired) {
+      return NextResponse.json({ error: "This task requires proof to complete." }, { status: 400 });
+    }
+    if (existing.status !== "PENDING" && existing.status !== "POSTPONED") {
+      return NextResponse.json({ error: "This task can't be completed from its current state." }, { status: 400 });
+    }
+    data.status = "COMPLETED";
+    data.isMuted = true;
+    const completedTaskCount = await prisma.dailyTask.count({
+      where: { userId: session.user.id, status: "COMPLETED" },
+    });
+    newBadges = await checkAndAwardBadges(session.user.id, { completedTaskCount, comeback: false });
+  } else if (status !== undefined) {
+    data.status = status;
+  }
 
   const task = await prisma.dailyTask.update({ where: { id }, data });
-  return NextResponse.json(task);
+  return NextResponse.json({ ...task, newBadges });
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {

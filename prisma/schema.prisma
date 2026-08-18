@@ -106,6 +106,16 @@ model DailyTask {
   recurringTemplateId String?
   title         String
   description   String?
+  // Freeform user tag ("Work", "Personal", ...) — no separate managed-list
+  // entity, just a string with client-side autocomplete from the user's own
+  // past values (see GET /api/tasks/categories).
+  category      String?
+  // When false, checking this task off completes it immediately with no
+  // Proof Modal step (see app/api/tasks/[id]/route.ts's PATCH handler).
+  // Always true for system-created penalty tasks — nothing in the
+  // user-facing creation form can set this on a penalty task, since those
+  // are only ever created server-side by lib/penalty-engine.ts.
+  proofRequired Boolean   @default(true)
   // Informational "HH:mm" carried over from a goal step's timeOfDay
   // (lib/daily-steps.ts) or a recurring task template — display-only, does
   // not change the day-granular deadline/penalty timing.
@@ -319,6 +329,9 @@ model RecurringTaskTemplate {
   // what actually triggers that occurrence's push reminder (see
   // lib/push.ts). Optional — no time set means no reminder for this habit.
   notificationTime String?
+  // Carried onto each materialized DailyTask, same as notificationTime.
+  category    String?
+  proofRequired Boolean @default(true)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

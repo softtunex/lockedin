@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const { title, description, scheduledDate, parentGoalId, dueTime } = parsed.data;
+  const { title, description, scheduledDate, parentGoalId, dueTime, category, proofRequired } = parsed.data;
 
   if (parentGoalId) {
     const goal = await prisma.goal.findFirst({ where: { id: parentGoalId, userId: session.user.id } });
@@ -55,6 +55,8 @@ export async function POST(request: Request) {
       title,
       description,
       dueTime,
+      category,
+      proofRequired,
       scheduledDate: dayStart(scheduledDate),
       parentGoalId: parentGoalId ?? null,
     },

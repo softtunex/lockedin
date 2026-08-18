@@ -102,6 +102,8 @@ export const taskCreateSchema = z.object({
   parentGoalId: z.string().optional(),
   // "HH:mm" — when set, this task gets a push notification at this time.
   dueTime: notificationTimeSchema.optional(),
+  category: z.string().max(60).optional(),
+  proofRequired: z.boolean().default(true),
 });
 
 export const recurringTaskCreateSchema = z.object({
@@ -112,6 +114,18 @@ export const recurringTaskCreateSchema = z.object({
   // server-side if omitted.
   startDate: z.string().optional(),
   notificationTime: notificationTimeSchema.optional(),
+  category: z.string().max(60).optional(),
+  proofRequired: z.boolean().default(true),
+});
+
+// Batch Mode: one line of pasted/typed text per task, all one-off (no
+// recurrence — that would defeat the point of a fast multi-task paste) and
+// sharing the same date/category/proof-required setting.
+export const batchTaskCreateSchema = z.object({
+  titles: z.array(z.string().min(1).max(140)).min(1, "Add at least one task").max(50, "50 tasks at a time, max"),
+  scheduledDate: z.string(),
+  category: z.string().max(60).optional(),
+  proofRequired: z.boolean().default(true),
 });
 
 export const taskUpdateSchema = z.object({

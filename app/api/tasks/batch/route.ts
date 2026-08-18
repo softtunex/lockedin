@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { recurringTaskCreateSchema } from "@/lib/validations";
-import { safeJson } from "@/lib/api";
+import { batchTaskCreateSchema } from "@/lib/validations";
 import { dayStart } from "@/lib/date";
+import { safeJson } from "@/lib/api";
 import { getUnresolvedMandatoryPenalty } from "@/lib/session";
-import { ensureTodayTasksForRecurringTemplates } from "@/lib/recurring-tasks";
 
+// Batch Mode: one DailyTask per line, all one-off (no recurrence), sharing
+// the same date/category/proof-required setting picked once in the modal.
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -20,29 +21,23 @@ export async function POST(request: Request) {
   }
 
   const body = await safeJson(request);
-  const parsed = recurringTaskCreateSchema.safeParse(body);
+  const parsed = batchTaskCreateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const { title, description, schedule, startDate, notificationTime, category, proofRequired } = parsed.data;
+  const { titles, scheduledDate, category, proofRequired } = parsed.data;
+  const scheduled = dayStart(scheduledDate);
 
-  const template = await prisma.recurringTaskTemplate.create({
-    data: {
+  const { count } = await prisma.dailyTask.createMany({
+    data: titles.map((title) => ({
       userId: session.user.id,
       title,
-      description,
-      frequency: schedule.frequency,
-      intervalDays: schedule.frequency === "EVERY_X_DAYS" ? schedule.intervalDays : undefined,
-      daysOfWeek: schedule.frequency === "WEEKLY" ? JSON.stringify(schedule.daysOfWeek) : undefined,
-      anchorDate: startDate ? dayStart(startDate) : dayStart(new Date()),
-      notificationTime,
       category,
       proofRequired,
-    },
+      scheduledDate: scheduled,
+    })),
   });
 
-  await ensureTodayTasksForRecurringTemplates(session.user.id);
-
-  return NextResponse.json(template, { status: 201 });
+  return NextResponse.json({ count }, { status: 201 });
 }

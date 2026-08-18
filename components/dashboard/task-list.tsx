@@ -9,7 +9,8 @@ import type { DailyTask, ProofOfWork, Goal } from "@/generated/prisma/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Check, Pencil, Clock3, Link2, FileText, Target, Timer, FlaskConical } from "lucide-react";
+import { Check, Pencil, Clock3, Link2, FileText, Target, Timer, FlaskConical, Tag } from "lucide-react";
+import { BADGE_CATALOG, type BadgeKey } from "@/lib/badge-catalog";
 import { ProofModal } from "./proof-modal";
 import { EditTaskModal } from "./edit-task-modal";
 import { SnoozeModal } from "./snooze-modal";
@@ -87,6 +88,7 @@ export function TaskList({
   const [proofTask, setProofTask] = useState<TaskWithProofs | null>(null);
   const [editTask, setEditTask] = useState<TaskWithProofs | null>(null);
   const [snoozeTask, setSnoozeTask] = useState<TaskWithProofs | null>(null);
+  const [completingId, setCompletingId] = useState<string | null>(null);
   const msRemaining = useMsUntilMidnight();
   const isUrgent = msRemaining !== null && msRemaining < URGENT_THRESHOLD_MS;
 
@@ -96,6 +98,38 @@ export function TaskList({
 
   function removeTask(id: string) {
     setTasks((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  async function completeWithoutProof(task: TaskWithProofs) {
+    setCompletingId(task.id);
+    const res = await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "COMPLETED" }),
+    });
+    setCompletingId(null);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error ?? "Couldn't complete task");
+      return;
+    }
+
+    const data = await res.json();
+    updateTask({ ...task, ...data });
+    toast.success("Nice work. Logged for today.");
+    for (const key of data.newBadges ?? []) {
+      const badge = BADGE_CATALOG[key as BadgeKey];
+      if (badge) toast(`🏅 Badge earned: ${badge.label}`, { description: badge.description });
+    }
+  }
+
+  function handleCheckboxClick(task: TaskWithProofs) {
+    if (task.proofRequired) {
+      setProofTask(task);
+    } else {
+      completeWithoutProof(task);
+    }
   }
 
   if (tasks.length === 0) {
@@ -139,8 +173,8 @@ export function TaskList({
             <CardContent className="flex flex-wrap items-start gap-3 p-4">
               <button
                 type="button"
-                disabled={isDone || isFailed || isPendingAssignment}
-                onClick={() => setProofTask(task)}
+                disabled={isDone || isFailed || isPendingAssignment || completingId === task.id}
+                onClick={() => handleCheckboxClick(task)}
                 aria-label={isDone ? "Completed" : isPendingAssignment ? "Waiting for buddy to assign" : "Mark as done"}
                 className={cn(
                   "relative mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors before:absolute before:-inset-3 before:content-['']",
@@ -177,6 +211,12 @@ export function TaskList({
                     <span className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
                       <Target className="h-3 w-3" />
                       {task.parentGoal.title}
+                    </span>
+                  )}
+                  {task.category && (
+                    <span className="flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
+                      <Tag className="h-3 w-3" />
+                      {task.category}
                     </span>
                   )}
                   {showDate && (
