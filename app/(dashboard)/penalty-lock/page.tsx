@@ -20,7 +20,13 @@ export default async function PenaltyLockPage() {
 
   const tasks = (await prisma.dailyTask.findMany({
     where: { id: { in: penalties.map((p) => p.dailyTaskId) } },
-    include: { proofs: { orderBy: { submittedAt: "desc" } }, parentGoal: true },
+    include: {
+      proofs: { orderBy: { submittedAt: "desc" } },
+      parentGoal: true,
+      sharedGroup: {
+        include: { tasks: { select: { id: true, userId: true, status: true, user: { select: { name: true } } } } },
+      },
+    },
   })) as TaskWithProofs[];
 
   if (tasks.length === 0) redirect("/dashboard");

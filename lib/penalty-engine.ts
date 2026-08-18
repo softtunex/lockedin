@@ -54,6 +54,7 @@ export async function runEodSweep(referenceDate: Date = new Date()): Promise<Swe
     for (const task of pending) {
       await prisma.dailyTask.update({ where: { id: task.id }, data: { status: "FAILED_PENALIZED" } });
       await notifyBuddyOfFailure(user, task.title);
+      await notifySharedPartnerOfDefault(task.sharedGroupId, task.id, task.title, user.name);
       await applyPenalty(user, task.id, task.title, user.penaltyPreference as PenaltyType, user.penaltyStakeAmount);
       tasksPenalized += 1;
     }
@@ -105,8 +106,35 @@ export async function penalizeTaskNow(dailyTaskId: string): Promise<void> {
 
   await prisma.dailyTask.update({ where: { id: task.id }, data: { status: "FAILED_PENALIZED" } });
   await notifyBuddyOfFailure(user, task.title);
+  await notifySharedPartnerOfDefault(task.sharedGroupId, task.id, task.title, user.name);
   await applyPenalty(user, task.id, task.title, user.penaltyPreference as PenaltyType, user.penaltyStakeAmount);
   await prisma.user.update({ where: { id: user.id }, data: { currentStreak: 0 } });
+}
+
+// Co-op/Shared Task: if the failed task was one half of a shared pair,
+// tell the other half's owner — regardless of completion mode. In
+// INDEPENDENT mode their own copy may already be COMPLETED; this is purely
+// informational ("your partner didn't come through"). In BLOCKING mode
+// their copy is likely still PENDING_PARTNER (see the proof route) — it
+// stays that way rather than auto-resolving, since the joint task genuinely
+// wasn't finished together, but it's also excluded from the sweep's own
+// PENDING/POSTPONED failure filter, so it's never penalized either.
+async function notifySharedPartnerOfDefault(
+  sharedGroupId: string | null,
+  failedTaskId: string,
+  taskTitle: string,
+  failedUserName: string,
+) {
+  if (!sharedGroupId) return;
+  const sibling = await prisma.dailyTask.findFirst({
+    where: { sharedGroupId, id: { not: failedTaskId } },
+  });
+  if (!sibling) return;
+  await sendPushToUser(sibling.userId, {
+    title: "Partner defaulted on your shared task",
+    body: `${failedUserName} missed "${taskTitle}" — your shared task with them wasn't completed together.`,
+    url: "/dashboard",
+  });
 }
 
 // Creates one randomized mandatory penalty task + its unresolved PenaltyLog.

@@ -5,18 +5,23 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
 import { isSameDay, format } from "date-fns";
-import type { DailyTask, ProofOfWork, Goal } from "@/generated/prisma/client";
+import type { DailyTask, ProofOfWork, Goal, SharedTaskGroup } from "@/generated/prisma/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Check, Pencil, Clock3, Link2, FileText, Target, Timer, FlaskConical, Tag } from "lucide-react";
+import { Check, Pencil, Clock3, Link2, FileText, Target, Timer, FlaskConical, Tag, Users, Bell } from "lucide-react";
 import { BADGE_CATALOG, type BadgeKey } from "@/lib/badge-catalog";
 import { ProofModal } from "./proof-modal";
 import { EditTaskModal } from "./edit-task-modal";
 import { SnoozeModal } from "./snooze-modal";
 import { useMsUntilMidnight, formatCountdown } from "@/lib/use-midnight-countdown";
 
-export type TaskWithProofs = DailyTask & { proofs: ProofOfWork[]; parentGoal: Goal | null };
+type SharedPartnerTask = { id: string; userId: string; status: string; user: { name: string } };
+export type TaskWithProofs = DailyTask & {
+  proofs: ProofOfWork[];
+  parentGoal: Goal | null;
+  sharedGroup: (SharedTaskGroup & { tasks: SharedPartnerTask[] }) | null;
+};
 
 const URGENT_THRESHOLD_MS = 2 * 60 * 60 * 1000;
 
@@ -132,6 +137,19 @@ export function TaskList({
     }
   }
 
+  async function remindPartner(buddyUserId: string) {
+    const res = await fetch("/api/buddy/nudge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ buddyUserId }),
+    });
+    if (!res.ok) {
+      toast.error("Couldn't send reminder");
+      return;
+    }
+    toast.success("Reminder sent");
+  }
+
   if (tasks.length === 0) {
     return (
       <Card>
@@ -154,10 +172,13 @@ export function TaskList({
         const isDone = task.status === "COMPLETED";
         const isFailed = task.status === "FAILED_PENALIZED";
         const isPendingAssignment = task.status === "PENDING_ASSIGNMENT";
-        const isActionable = !isDone && !isFailed && !isPendingAssignment;
+        const isPendingPartner = task.status === "PENDING_PARTNER";
+        const isActionable = !isDone && !isFailed && !isPendingAssignment && !isPendingPartner;
         const alreadySnoozedToday = Boolean(task.lastSnoozedAt) && isSameDay(new Date(task.lastSnoozedAt!), new Date());
         const proof = task.proofs[0];
         const isOverdue = variant === "overdue" && (task.status === "PENDING" || task.status === "POSTPONED");
+        const partnerTask = task.sharedGroup?.tasks.find((t) => t.id !== task.id);
+        const partnerDefaulted = partnerTask?.status === "FAILED_PENALIZED";
 
         return (
           <Card
@@ -167,20 +188,30 @@ export function TaskList({
               isFailed && "border-l-destructive bg-destructive/5",
               isDone && "border-l-amber-500 bg-amber-500/5",
               isPendingAssignment && "border-l-amber-500/50 bg-amber-500/5",
+              isPendingPartner && "border-l-blue-500/50 bg-blue-500/5",
               isActionable && "border-l-primary",
             )}
           >
             <CardContent className="flex flex-wrap items-start gap-3 p-4">
               <button
                 type="button"
-                disabled={isDone || isFailed || isPendingAssignment || completingId === task.id}
+                disabled={isDone || isFailed || isPendingAssignment || isPendingPartner || completingId === task.id}
                 onClick={() => handleCheckboxClick(task)}
-                aria-label={isDone ? "Completed" : isPendingAssignment ? "Waiting for buddy to assign" : "Mark as done"}
+                aria-label={
+                  isDone
+                    ? "Completed"
+                    : isPendingAssignment
+                      ? "Waiting for buddy to assign"
+                      : isPendingPartner
+                        ? "Waiting on partner"
+                        : "Mark as done"
+                }
                 className={cn(
                   "relative mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors before:absolute before:-inset-3 before:content-['']",
                   isDone && "animate-in zoom-in-50 duration-300 border-amber-500 bg-amber-500 text-white",
                   isFailed && "border-destructive/50",
                   isPendingAssignment && "border-amber-500/40",
+                  isPendingPartner && "border-blue-500/40",
                   isActionable && "border-muted-foreground/40 hover:border-primary",
                 )}
               >
@@ -205,6 +236,22 @@ export function TaskList({
                   {isPendingAssignment && (
                     <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
                       Waiting for buddy to assign
+                    </span>
+                  )}
+                  {partnerTask && (
+                    <span className="flex items-center gap-1 rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-400">
+                      <Users className="h-3 w-3" />
+                      Shared with {partnerTask.user.name}
+                    </span>
+                  )}
+                  {isPendingPartner && (
+                    <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-400">
+                      Waiting on partner
+                    </span>
+                  )}
+                  {partnerDefaulted && (
+                    <span className="rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
+                      Partner defaulted
                     </span>
                   )}
                   {task.parentGoal && (
@@ -290,27 +337,42 @@ export function TaskList({
                 )}
               </div>
 
-              {isActionable && (
+              {(isActionable || (isPendingPartner && partnerTask)) && (
                 <div className="flex w-full shrink-0 justify-end gap-1 sm:w-auto">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-11 sm:h-7"
-                    onClick={() => setEditTask(task)}
-                    aria-label="Edit"
-                  >
-                    <Pencil className="h-3.5 w-3.5" /> Edit
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-11 sm:h-7"
-                    disabled={alreadySnoozedToday || locked}
-                    onClick={() => setSnoozeTask(task)}
-                    aria-label={locked ? "Locked" : alreadySnoozedToday ? "Already rescheduled today" : "Do later"}
-                  >
-                    <Clock3 className="h-3.5 w-3.5" /> {alreadySnoozedToday ? "Rescheduled" : "Do Later"}
-                  </Button>
+                  {isActionable && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-11 sm:h-7"
+                        onClick={() => setEditTask(task)}
+                        aria-label="Edit"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-11 sm:h-7"
+                        disabled={alreadySnoozedToday || locked}
+                        onClick={() => setSnoozeTask(task)}
+                        aria-label={locked ? "Locked" : alreadySnoozedToday ? "Already rescheduled today" : "Do later"}
+                      >
+                        <Clock3 className="h-3.5 w-3.5" /> {alreadySnoozedToday ? "Rescheduled" : "Do Later"}
+                      </Button>
+                    </>
+                  )}
+                  {partnerTask && !partnerDefaulted && partnerTask.status !== "COMPLETED" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-11 sm:h-7"
+                      onClick={() => remindPartner(partnerTask.userId)}
+                      aria-label="Remind partner"
+                    >
+                      <Bell className="h-3.5 w-3.5" /> Remind Partner
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>

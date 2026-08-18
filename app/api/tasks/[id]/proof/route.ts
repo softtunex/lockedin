@@ -47,7 +47,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     proofData = parsed.data.proofData;
   }
 
-  // A Mandatory Task / Double Workload penalty task doesn't self-complete on
+  // A Mandatory Task / Buddy-Assigned penalty task doesn't self-complete on
   // proof — it needs a buddy's approval first (see
   // app/api/buddy/proof/[id]/route.ts), so the hard lockout in
   // lib/session.ts's getUnresolvedMandatoryPenalty stays in effect until
@@ -57,42 +57,92 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     : null;
   const isMandatoryResolution = Boolean(unresolvedPenaltyLog);
 
+  // Co-op/Shared Task (see prisma/schema.prisma's SharedTaskGroup). In
+  // BLOCKING mode, this proof only fully completes my row once my partner's
+  // linked row has also gotten there — otherwise it parks at
+  // PENDING_PARTNER until they do. INDEPENDENT mode (and non-shared tasks)
+  // complete immediately, same as always.
+  const siblingTask = !isMandatoryResolution && task.sharedGroupId
+    ? await prisma.dailyTask.findFirst({ where: { sharedGroupId: task.sharedGroupId, id: { not: task.id } } })
+    : null;
+  const sharedGroup = siblingTask
+    ? await prisma.sharedTaskGroup.findUnique({ where: { id: task.sharedGroupId! } })
+    : null;
+  const isBlocking = sharedGroup?.completionMode === "BLOCKING";
+  const partnerAlreadyWaiting = siblingTask?.status === "PENDING_PARTNER";
+
+  const myNewStatus = isMandatoryResolution
+    ? "PENDING_APPROVAL"
+    : isBlocking && !partnerAlreadyWaiting
+      ? "PENDING_PARTNER"
+      : "COMPLETED";
+  const bothNowComplete = isBlocking && partnerAlreadyWaiting && myNewStatus === "COMPLETED";
+
   const [proof, updatedTask] = await prisma.$transaction([
     prisma.proofOfWork.create({
       data: { dailyTaskId: task.id, proofType, proofData },
     }),
     prisma.dailyTask.update({
       where: { id: task.id },
-      data: isMandatoryResolution
-        ? { status: "PENDING_APPROVAL" }
-        : { status: "COMPLETED", isMuted: true },
+      data: myNewStatus === "COMPLETED" ? { status: "COMPLETED", isMuted: true } : { status: myNewStatus },
     }),
-    ...(isMandatoryResolution
-      ? []
-      : [
+    ...(myNewStatus === "COMPLETED"
+      ? [
           prisma.penaltyLog.updateMany({
             where: { dailyTaskId: task.id, isResolved: false },
             data: { isResolved: true, resolvedAt: new Date() },
           }),
-        ]),
+        ]
+      : []),
+    ...(bothNowComplete && siblingTask
+      ? [prisma.dailyTask.update({ where: { id: siblingTask.id }, data: { status: "COMPLETED", isMuted: true } })]
+      : []),
   ]);
 
-  const newBadges = isMandatoryResolution
-    ? []
-    : await (async () => {
-        const completedTaskCount = await prisma.dailyTask.count({
-          where: { userId: session.user.id, status: "COMPLETED" },
-        });
-        return checkAndAwardBadges(session.user.id, {
-          completedTaskCount,
-          comeback: task.isPenaltyTask,
-        });
-      })();
+  const newBadges =
+    myNewStatus !== "COMPLETED"
+      ? []
+      : await (async () => {
+          const completedTaskCount = await prisma.dailyTask.count({
+            where: { userId: session.user.id, status: "COMPLETED" },
+          });
+          return checkAndAwardBadges(session.user.id, {
+            completedTaskCount,
+            comeback: task.isPenaltyTask,
+          });
+        })();
 
   const submitter = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { name: true },
   });
+
+  if (siblingTask) {
+    if (myNewStatus === "PENDING_PARTNER") {
+      await sendPushToUser(siblingTask.userId, {
+        title: "Your turn on your shared task",
+        body: `${submitter?.name} submitted their part of "${task.title}" — you're up.`,
+        url: "/dashboard",
+      });
+    } else if (bothNowComplete) {
+      const partnerCompletedCount = await prisma.dailyTask.count({
+        where: { userId: siblingTask.userId, status: "COMPLETED" },
+      });
+      await checkAndAwardBadges(siblingTask.userId, { completedTaskCount: partnerCompletedCount, comeback: false });
+      await sendPushToUser(siblingTask.userId, {
+        title: "Shared task complete!",
+        body: `You and ${submitter?.name} both finished "${task.title}".`,
+        url: "/dashboard",
+      });
+    } else {
+      await sendPushToUser(siblingTask.userId, {
+        title: "Partner completed the shared task",
+        body: `${submitter?.name} completed their part of "${task.title}".`,
+        url: "/dashboard",
+      });
+    }
+  }
+
   const buddyIds = await getBuddyIds(session.user.id);
   if (buddyIds.length > 0) {
     await prisma.proofVerification.createMany({

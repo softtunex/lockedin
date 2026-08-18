@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { SELECTABLE_PENALTY_PREFERENCES, PROOF_TYPES, TASK_STATUSES, TIMEFRAMES, isSingleTaskTimeframe } from "./enums";
+import {
+  SELECTABLE_PENALTY_PREFERENCES,
+  PROOF_TYPES,
+  TASK_STATUSES,
+  TIMEFRAMES,
+  SHARED_COMPLETION_MODES,
+  isSingleTaskTimeframe,
+} from "./enums";
 import { WEEKDAY_CODES } from "./schedule";
 
 export const scheduleRuleSchema = z.discriminatedUnion("frequency", [
@@ -126,6 +133,19 @@ export const batchTaskCreateSchema = z.object({
   scheduledDate: z.string(),
   category: z.string().max(60).optional(),
   proofRequired: z.boolean().default(true),
+});
+
+// Co-op/Shared Task — always proof-required (there's nothing to jointly
+// verify otherwise) and never recurring (each occurrence is created fresh,
+// same reasoning as batch mode).
+export const sharedTaskCreateSchema = z.object({
+  title: z.string().min(1).max(140),
+  description: z.string().optional(),
+  scheduledDate: z.string(),
+  dueTime: notificationTimeSchema.optional(),
+  category: z.string().max(60).optional(),
+  buddyUserId: z.string().min(1),
+  completionMode: z.enum(SHARED_COMPLETION_MODES).default("INDEPENDENT"),
 });
 
 export const taskUpdateSchema = z.object({

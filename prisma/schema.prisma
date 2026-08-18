@@ -104,6 +104,10 @@ model DailyTask {
   // Which RecurringTaskTemplate this instance was generated from, if any —
   // same dedup role as stepTemplateId, for standalone recurring habits.
   recurringTemplateId String?
+  // Set on both linked rows of a Co-op/Shared Task — see SharedTaskGroup.
+  // Each partner gets their own normal, single-owner DailyTask row (not one
+  // row with two owners); this is just how the two find each other.
+  sharedGroupId String?
   title         String
   description   String?
   // Freeform user tag ("Work", "Personal", ...) — no separate managed-list
@@ -121,7 +125,7 @@ model DailyTask {
   // not change the day-granular deadline/penalty timing.
   dueTime       String?
   scheduledDate DateTime
-  status        String    @default("PENDING") // PENDING | COMPLETED | POSTPONED | FAILED_PENALIZED | EXCUSED | PENDING_APPROVAL
+  status        String    @default("PENDING") // PENDING | COMPLETED | POSTPONED | FAILED_PENALIZED | EXCUSED | PENDING_APPROVAL | PENDING_ASSIGNMENT | PENDING_PARTNER
   isMuted       Boolean   @default(false)
   isPenaltyTask Boolean   @default(false)
   // Only set for goals created with the "10 Seconds (Test)" timeframe — a
@@ -138,12 +142,38 @@ model DailyTask {
   user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   parentGoal        Goal?                  @relation(fields: [parentGoalId], references: [id], onDelete: SetNull)
   recurringTemplate RecurringTaskTemplate? @relation(fields: [recurringTemplateId], references: [id], onDelete: SetNull)
+  sharedGroup       SharedTaskGroup?       @relation(fields: [sharedGroupId], references: [id], onDelete: SetNull)
   proofs     ProofOfWork[]
   penaltyLogs PenaltyLog[]
 
   @@index([userId, scheduledDate])
   @@index([parentGoalId])
   @@index([recurringTemplateId])
+  @@index([sharedGroupId])
+}
+
+// Links exactly two DailyTask rows (one per partner) as a Co-op/Shared Task.
+// Each row is otherwise a completely normal, single-owner task — every
+// existing ownership check, penalty-sweep query, and streak calculation in
+// the app keeps working unmodified. This is purely how the two rows find
+// each other for cross-notification (and, in BLOCKING mode, to check
+// whether the other side has submitted proof yet).
+model SharedTaskGroup {
+  id             String   @id @default(cuid())
+  // INDEPENDENT: each partner's proof completes their own row immediately,
+  // same as any normal task — no waiting. A "Partner Defaulted" badge shows
+  // if the other side's row later fails.
+  // BLOCKING: submitting proof moves your row to PENDING_PARTNER instead of
+  // COMPLETED; both rows flip to COMPLETED together once both partners have
+  // submitted. If your partner never does, your row just stays
+  // PENDING_PARTNER — not penalized (excluded from the EOD sweep's
+  // PENDING/POSTPONED failure filter same as EXCUSED), but not a
+  // celebratory completion either, since the joint task genuinely wasn't
+  // finished together.
+  completionMode String   @default("INDEPENDENT")
+  createdAt      DateTime @default(now())
+
+  tasks DailyTask[]
 }
 
 model ProofOfWork {

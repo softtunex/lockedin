@@ -48,7 +48,13 @@ export default async function DashboardPage() {
           },
         ],
       },
-      include: { proofs: { orderBy: { submittedAt: "desc" } }, parentGoal: true },
+      include: {
+        proofs: { orderBy: { submittedAt: "desc" } },
+        parentGoal: true,
+        sharedGroup: {
+          include: { tasks: { select: { id: true, userId: true, status: true, user: { select: { name: true } } } } },
+        },
+      },
       orderBy: { scheduledDate: "asc" },
     }) as Promise<TaskWithProofs[]>,
     prisma.goal.findMany({

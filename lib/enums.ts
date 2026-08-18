@@ -29,8 +29,22 @@ export const TASK_STATUSES = [
   // buddy hasn't written it. Not proof-submittable until they do (see
   // app/api/buddy/penalty-task/[id]/assign/route.ts).
   "PENDING_ASSIGNMENT",
+  // BLOCKING-mode Shared Task: your own proof is submitted, waiting on your
+  // partner's linked row to also complete before both flip to COMPLETED.
+  // Excluded from the EOD sweep's PENDING/POSTPONED failure filter, same as
+  // EXCUSED — you're not penalized for a partner who never showed up, but
+  // it doesn't count as a completed day either.
+  "PENDING_PARTNER",
 ] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+export const SHARED_COMPLETION_MODES = ["INDEPENDENT", "BLOCKING"] as const;
+export type SharedCompletionMode = (typeof SHARED_COMPLETION_MODES)[number];
+
+export const SHARED_COMPLETION_MODE_LABELS: Record<SharedCompletionMode, string> = {
+  INDEPENDENT: "Independent — your proof completes your copy right away",
+  BLOCKING: "Blocking — waits for both of you before either counts as done",
+};
 
 export const PROOF_TYPES = ["IMAGE", "URL", "TEXT"] as const;
 export type ProofType = (typeof PROOF_TYPES)[number];

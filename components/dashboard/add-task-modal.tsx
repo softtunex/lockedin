@@ -18,10 +18,14 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { DateLabel } from "@/components/ui/date-label";
 import { Spinner } from "@/components/ui/spinner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RepeatPicker } from "@/components/shared/repeat-picker";
 import { VoiceInputButton } from "@/components/shared/voice-input-button";
 import { Plus } from "lucide-react";
 import type { ScheduleRule } from "@/lib/schedule";
+import { SHARED_COMPLETION_MODES, SHARED_COMPLETION_MODE_LABELS, type SharedCompletionMode } from "@/lib/enums";
+
+type Buddy = { id: string; name: string };
 
 export function AddTaskModal({ locked = false }: { locked?: boolean }) {
   const router = useRouter();
@@ -38,6 +42,10 @@ export function AddTaskModal({ locked = false }: { locked?: boolean }) {
   const [category, setCategory] = useState("");
   const [proofRequired, setProofRequired] = useState(true);
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
+  const [buddies, setBuddies] = useState<Buddy[]>([]);
+  const [sharedTask, setSharedTask] = useState(false);
+  const [sharedBuddyId, setSharedBuddyId] = useState("");
+  const [completionMode, setCompletionMode] = useState<SharedCompletionMode>("INDEPENDENT");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -45,6 +53,13 @@ export function AddTaskModal({ locked = false }: { locked?: boolean }) {
     fetch("/api/tasks/categories")
       .then((res) => (res.ok ? res.json() : []))
       .then(setCategoryOptions)
+      .catch(() => {});
+    fetch("/api/buddy/list")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list: Buddy[]) => {
+        setBuddies(list);
+        setSharedBuddyId((prev) => prev || list[0]?.id || "");
+      })
       .catch(() => {});
   }, [open]);
 
@@ -58,6 +73,8 @@ export function AddTaskModal({ locked = false }: { locked?: boolean }) {
     setBatchText("");
     setCategory("");
     setProofRequired(true);
+    setSharedTask(false);
+    setCompletionMode("INDEPENDENT");
   }
 
   async function handleSubmit() {
@@ -100,6 +117,40 @@ export function AddTaskModal({ locked = false }: { locked?: boolean }) {
 
     if (!title.trim()) {
       toast.error("Give the task a title");
+      return;
+    }
+
+    if (sharedTask) {
+      if (!sharedBuddyId) {
+        toast.error("Pick a buddy to share this task with");
+        return;
+      }
+      setSubmitting(true);
+      const res = await fetch("/api/tasks/shared", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim() || undefined,
+          scheduledDate: date,
+          dueTime: notificationTime || undefined,
+          category: category.trim() || undefined,
+          buddyUserId: sharedBuddyId,
+          completionMode,
+        }),
+      });
+      setSubmitting(false);
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error ?? "Failed to add shared task");
+        if (res.status === 423 && data.reason === "MANDATORY_TASK") router.push("/penalty-lock");
+        return;
+      }
+
+      reset();
+      setOpen(false);
+      router.refresh();
       return;
     }
 
@@ -166,12 +217,14 @@ export function AddTaskModal({ locked = false }: { locked?: boolean }) {
             <DialogTitle>Add a task</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-              <Label htmlFor="batch-mode" className="cursor-pointer text-sm font-normal">
-                Batch Mode — paste or dictate multiple tasks at once
-              </Label>
-              <Switch id="batch-mode" checked={batchMode} onCheckedChange={setBatchMode} />
-            </div>
+            {!sharedTask && (
+              <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                <Label htmlFor="batch-mode" className="cursor-pointer text-sm font-normal">
+                  Batch Mode — paste or dictate multiple tasks at once
+                </Label>
+                <Switch id="batch-mode" checked={batchMode} onCheckedChange={setBatchMode} />
+              </div>
+            )}
 
             {batchMode ? (
               <div className="space-y-2">
@@ -210,7 +263,54 @@ export function AddTaskModal({ locked = false }: { locked?: boolean }) {
 
             <DateLabel id="new-task-date" label="Date" value={date} onChange={setDate} min={todayStr} />
 
-            {!batchMode && (
+            {!batchMode && buddies.length > 0 && (
+              <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                <Label htmlFor="shared-task" className="cursor-pointer text-sm font-normal">
+                  Co-op / Shared Task — do it together with a buddy
+                </Label>
+                <Switch id="shared-task" checked={sharedTask} onCheckedChange={setSharedTask} />
+              </div>
+            )}
+
+            {sharedTask && (
+              <div className="space-y-3 rounded-md border border-blue-500/20 bg-blue-500/5 p-3">
+                <div className="space-y-2">
+                  <Label>Buddy</Label>
+                  <Select value={sharedBuddyId} onValueChange={(v) => setSharedBuddyId(v ?? "")}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose a buddy" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {buddies.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Completion</Label>
+                  <Select value={completionMode} onValueChange={(v) => setCompletionMode((v ?? "INDEPENDENT") as SharedCompletionMode)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SHARED_COMPLETION_MODES.map((mode) => (
+                        <SelectItem key={mode} value={mode}>
+                          {SHARED_COMPLETION_MODE_LABELS[mode]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Both of you get your own copy of this task and must each submit your own proof.
+                </p>
+              </div>
+            )}
+
+            {!batchMode && !sharedTask && (
               <div className="space-y-2">
                 <Label>Repeat</Label>
                 <RepeatPicker value={schedule} onChange={setSchedule} allowOnce anchorDate={date} />
@@ -248,17 +348,19 @@ export function AddTaskModal({ locked = false }: { locked?: boolean }) {
               </div>
             )}
 
-            <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-              <div>
-                <Label htmlFor="proof-required" className="cursor-pointer text-sm font-normal">
-                  Proof required
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  {proofRequired ? "Checking this off opens the Proof Modal." : "Checking this off completes it immediately — no proof."}
-                </p>
+            {!sharedTask && (
+              <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                <div>
+                  <Label htmlFor="proof-required" className="cursor-pointer text-sm font-normal">
+                    Proof required
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {proofRequired ? "Checking this off opens the Proof Modal." : "Checking this off completes it immediately — no proof."}
+                  </p>
+                </div>
+                <Switch id="proof-required" checked={proofRequired} onCheckedChange={setProofRequired} />
               </div>
-              <Switch id="proof-required" checked={proofRequired} onCheckedChange={setProofRequired} />
-            </div>
+            )}
           </div>
           <DialogFooter>
             <Button
