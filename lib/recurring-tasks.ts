@@ -36,7 +36,6 @@ export async function ensureTodayTasksForRecurringTemplates(userId: string): Pro
       description: t.description,
       dueTime: t.notificationTime,
       category: t.category,
-      proofRequired: t.proofRequired,
       scheduledDate: today,
     })),
   });

@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const { titles, scheduledDate, category, proofRequired } = parsed.data;
+  const { titles, scheduledDate, category } = parsed.data;
   const scheduled = dayStart(scheduledDate);
 
   const { count } = await prisma.dailyTask.createMany({
@@ -34,7 +34,6 @@ export async function POST(request: Request) {
       userId: session.user.id,
       title,
       category,
-      proofRequired,
       scheduledDate: scheduled,
     })),
   });

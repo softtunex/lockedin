@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useState } from "react";
+import type { ComponentProps } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import {
   Dialog,
   DialogContent,
@@ -19,28 +20,53 @@ import { Switch } from "@/components/ui/switch";
 import { DateLabel } from "@/components/ui/date-label";
 import { Spinner } from "@/components/ui/spinner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RepeatPicker } from "@/components/shared/repeat-picker";
 import { VoiceInputButton } from "@/components/shared/voice-input-button";
-import { Plus } from "lucide-react";
+import { Plus, CalendarDays, Repeat, Tag, Bell, Users } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { ScheduleRule } from "@/lib/schedule";
+import { describeSchedule } from "@/lib/schedule";
 import { SHARED_COMPLETION_MODES, SHARED_COMPLETION_MODE_LABELS, type SharedCompletionMode } from "@/lib/enums";
 
 type Buddy = { id: string; name: string };
+
+// A pill-shaped button — the building block of the chip bar below the
+// title input. Each chip shows its own current-value summary so the modal
+// stays scannable without expanding every field at once (progressive
+// disclosure instead of one long always-visible form). forwardRef + prop
+// spreading so it works as a PopoverTrigger's `render` target, which
+// clone-merges its own onClick/aria-expanded/ref onto whatever element is
+// passed in.
+const Chip = forwardRef<HTMLButtonElement, ComponentProps<typeof Button> & { active?: boolean }>(
+  ({ active, className, ...props }, ref) => (
+    <Button
+      ref={ref}
+      variant="outline"
+      size="sm"
+      className={cn("rounded-full", active && "border-primary/40 bg-primary/10 text-primary", className)}
+      {...props}
+    />
+  ),
+);
+Chip.displayName = "Chip";
 
 export function AddTaskModal({ locked = false }: { locked?: boolean }) {
   const router = useRouter();
   const todayStr = format(new Date(), "yyyy-MM-dd");
   const [open, setOpen] = useState(false);
-  const [batchMode, setBatchMode] = useState(false);
+  const [mode, setMode] = useState<"single" | "batch">("single");
+  const batchMode = mode === "batch";
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [showDescription, setShowDescription] = useState(false);
   const [date, setDate] = useState(todayStr);
   const [schedule, setSchedule] = useState<ScheduleRule | null>(null);
   const [notificationTime, setNotificationTime] = useState("");
   const [batchText, setBatchText] = useState("");
   const [category, setCategory] = useState("");
-  const [proofRequired, setProofRequired] = useState(true);
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   const [buddies, setBuddies] = useState<Buddy[]>([]);
   const [sharedTask, setSharedTask] = useState(false);
@@ -64,17 +90,22 @@ export function AddTaskModal({ locked = false }: { locked?: boolean }) {
   }, [open]);
 
   function reset() {
-    setBatchMode(false);
+    setMode("single");
     setTitle("");
     setDescription("");
+    setShowDescription(false);
     setDate(todayStr);
     setSchedule(null);
     setNotificationTime("");
     setBatchText("");
     setCategory("");
-    setProofRequired(true);
     setSharedTask(false);
     setCompletionMode("INDEPENDENT");
+  }
+
+  function handleModeChange(next: "single" | "batch") {
+    setMode(next);
+    if (next === "batch") setSharedTask(false);
   }
 
   async function handleSubmit() {
@@ -95,7 +126,6 @@ export function AddTaskModal({ locked = false }: { locked?: boolean }) {
           titles,
           scheduledDate: date,
           category: category.trim() || undefined,
-          proofRequired,
         }),
       });
       setSubmitting(false);
@@ -166,7 +196,6 @@ export function AddTaskModal({ locked = false }: { locked?: boolean }) {
             startDate: date,
             notificationTime: notificationTime || undefined,
             category: category.trim() || undefined,
-            proofRequired,
           }),
         })
       : await fetch("/api/tasks", {
@@ -178,7 +207,6 @@ export function AddTaskModal({ locked = false }: { locked?: boolean }) {
             scheduledDate: date,
             dueTime: notificationTime || undefined,
             category: category.trim() || undefined,
-            proofRequired,
           }),
         });
     setSubmitting(false);
@@ -194,6 +222,10 @@ export function AddTaskModal({ locked = false }: { locked?: boolean }) {
     setOpen(false);
     router.refresh();
   }
+
+  const dateChipLabel = date === todayStr ? "Today" : format(parseISO(date), "MMM d");
+  const repeatChipLabel = schedule === null ? "Never" : describeSchedule(schedule);
+  const buddyName = buddies.find((b) => b.id === sharedBuddyId)?.name;
 
   return (
     <div className="space-y-2">
@@ -216,16 +248,19 @@ export function AddTaskModal({ locked = false }: { locked?: boolean }) {
           <DialogHeader>
             <DialogTitle>Add a task</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            {!sharedTask && (
-              <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                <Label htmlFor="batch-mode" className="cursor-pointer text-sm font-normal">
-                  Batch Mode — paste or dictate multiple tasks at once
-                </Label>
-                <Switch id="batch-mode" checked={batchMode} onCheckedChange={setBatchMode} />
-              </div>
-            )}
 
+          <Tabs value={mode} onValueChange={(v) => handleModeChange((v ?? "single") as "single" | "batch")}>
+            <TabsList className="w-full">
+              <TabsTrigger value="single" className="flex-1">
+                Single Task
+              </TabsTrigger>
+              <TabsTrigger value="batch" className="flex-1">
+                Batch Mode
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <div className="space-y-3">
             {batchMode ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -241,127 +276,183 @@ export function AddTaskModal({ locked = false }: { locked?: boolean }) {
                 />
               </div>
             ) : (
-              <>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="new-task-title">Title</Label>
-                    <VoiceInputButton onTranscript={(text) => setTitle((prev) => (prev ? `${prev} ${text}` : text))} />
-                  </div>
-                  <Input
-                    id="new-task-title"
-                    placeholder='e.g. "Read 20 pages"'
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+              <div className="flex items-center gap-2">
+                <Input
+                  id="new-task-title"
+                  placeholder="What needs to be done?"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="text-base"
+                  autoFocus
+                />
+                <VoiceInputButton onTranscript={(text) => setTitle((prev) => (prev ? `${prev} ${text}` : text))} />
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <Chip>
+                      <CalendarDays /> {dateChipLabel}
+                    </Chip>
+                  }
+                />
+                <PopoverContent>
+                  <DateLabel id="new-task-date" label="Date" value={date} onChange={setDate} min={todayStr} />
+                </PopoverContent>
+              </Popover>
+
+              {!batchMode && !sharedTask && (
+                <Popover>
+                  <PopoverTrigger
+                    render={
+                      <Chip active={schedule !== null}>
+                        <Repeat /> Repeat: {repeatChipLabel}
+                      </Chip>
+                    }
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="new-task-description">Description (optional)</Label>
-                  <Textarea id="new-task-description" value={description} onChange={(e) => setDescription(e.target.value)} />
-                </div>
-              </>
-            )}
+                  <PopoverContent className="w-80">
+                    <RepeatPicker value={schedule} onChange={setSchedule} allowOnce anchorDate={date} />
+                  </PopoverContent>
+                </Popover>
+              )}
 
-            <DateLabel id="new-task-date" label="Date" value={date} onChange={setDate} min={todayStr} />
-
-            {!batchMode && buddies.length > 0 && (
-              <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                <Label htmlFor="shared-task" className="cursor-pointer text-sm font-normal">
-                  Co-op / Shared Task — do it together with a buddy
-                </Label>
-                <Switch id="shared-task" checked={sharedTask} onCheckedChange={setSharedTask} />
-              </div>
-            )}
-
-            {sharedTask && (
-              <div className="space-y-3 rounded-md border border-blue-500/20 bg-blue-500/5 p-3">
-                <div className="space-y-2">
-                  <Label>Buddy</Label>
-                  <Select value={sharedBuddyId} onValueChange={(v) => setSharedBuddyId(v ?? "")}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a buddy" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {buddies.map((b) => (
-                        <SelectItem key={b.id} value={b.id}>
-                          {b.name}
-                        </SelectItem>
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <Chip active={Boolean(category.trim())}>
+                      <Tag /> {category.trim() || "Category"}
+                    </Chip>
+                  }
+                />
+                <PopoverContent>
+                  <div className="space-y-2">
+                    <Label htmlFor="new-task-category">Category / list</Label>
+                    <Input
+                      id="new-task-category"
+                      list="task-category-options"
+                      placeholder='e.g. "Work", "Personal"'
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      autoFocus
+                    />
+                    <datalist id="task-category-options">
+                      {categoryOptions.map((c) => (
+                        <option key={c} value={c} />
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Completion</Label>
-                  <Select value={completionMode} onValueChange={(v) => setCompletionMode((v ?? "INDEPENDENT") as SharedCompletionMode)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SHARED_COMPLETION_MODES.map((mode) => (
-                        <SelectItem key={mode} value={mode}>
-                          {SHARED_COMPLETION_MODE_LABELS[mode]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Both of you get your own copy of this task and must each submit your own proof.
-                </p>
-              </div>
-            )}
+                    </datalist>
+                  </div>
+                </PopoverContent>
+              </Popover>
 
-            {!batchMode && !sharedTask && (
-              <div className="space-y-2">
-                <Label>Repeat</Label>
-                <RepeatPicker value={schedule} onChange={setSchedule} allowOnce anchorDate={date} />
-              </div>
-            )}
+              {!batchMode && (
+                <Popover>
+                  <PopoverTrigger
+                    render={
+                      <Chip active={Boolean(notificationTime)}>
+                        <Bell /> {notificationTime || "Reminder"}
+                      </Chip>
+                    }
+                  />
+                  <PopoverContent>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-task-time">Notification time</Label>
+                      <Input
+                        id="new-task-time"
+                        type="time"
+                        value={notificationTime}
+                        onChange={(e) => setNotificationTime(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Get a push notification for this task specifically, instead of a generic daily nudge.
+                      </p>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
 
-            <div className="space-y-2">
-              <Label htmlFor="new-task-category">Category / list (optional)</Label>
-              <Input
-                id="new-task-category"
-                list="task-category-options"
-                placeholder='e.g. "Work", "Personal"'
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              />
-              <datalist id="task-category-options">
-                {categoryOptions.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
+              {!batchMode && buddies.length > 0 && (
+                <Popover>
+                  <PopoverTrigger
+                    render={
+                      <Chip active={sharedTask}>
+                        <Users /> {sharedTask && buddyName ? `With ${buddyName}` : "Solo"}
+                      </Chip>
+                    }
+                  />
+                  <PopoverContent className="w-80">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="shared-task" className="cursor-pointer text-sm font-normal">
+                          Co-op / Shared Task
+                        </Label>
+                        <Switch id="shared-task" checked={sharedTask} onCheckedChange={setSharedTask} />
+                      </div>
+                      {sharedTask && (
+                        <>
+                          <div className="space-y-2">
+                            <Label>Buddy</Label>
+                            <Select value={sharedBuddyId} onValueChange={(v) => setSharedBuddyId(v ?? "")}>
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Choose a buddy" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {buddies.map((b) => (
+                                  <SelectItem key={b.id} value={b.id}>
+                                    {b.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Completion</Label>
+                            <Select
+                              value={completionMode}
+                              onValueChange={(v) => setCompletionMode((v ?? "INDEPENDENT") as SharedCompletionMode)}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {SHARED_COMPLETION_MODES.map((m) => (
+                                  <SelectItem key={m} value={m}>
+                                    {SHARED_COMPLETION_MODE_LABELS[m]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Both of you get your own copy of this task and must each submit your own proof.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
 
-            {!batchMode && (
-              <div className="space-y-2">
-                <Label htmlFor="new-task-time">Notification time (optional)</Label>
-                <Input
-                  id="new-task-time"
-                  type="time"
-                  value={notificationTime}
-                  onChange={(e) => setNotificationTime(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Get a push notification for this task specifically, at this time — instead of a generic daily nudge.
-                </p>
-              </div>
-            )}
-
-            {!sharedTask && (
-              <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                <div>
-                  <Label htmlFor="proof-required" className="cursor-pointer text-sm font-normal">
-                    Proof required
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    {proofRequired ? "Checking this off opens the Proof Modal." : "Checking this off completes it immediately — no proof."}
-                  </p>
+            {!batchMode &&
+              (showDescription ? (
+                <div className="space-y-2">
+                  <Label htmlFor="new-task-description">Description</Label>
+                  <Textarea
+                    id="new-task-description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    autoFocus
+                  />
                 </div>
-                <Switch id="proof-required" checked={proofRequired} onCheckedChange={setProofRequired} />
-              </div>
-            )}
+              ) : (
+                <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setShowDescription(true)}>
+                  <Plus /> Add description
+                </Button>
+              ))}
           </div>
+
           <DialogFooter>
             <Button
               onClick={handleSubmit}

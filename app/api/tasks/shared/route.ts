@@ -42,7 +42,6 @@ export async function POST(request: Request) {
     description,
     dueTime,
     category,
-    proofRequired: true,
     scheduledDate: scheduled,
   };
 

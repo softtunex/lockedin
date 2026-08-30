@@ -38,11 +38,44 @@ export function ProofModal({
   const [dragOver, setDragOver] = useState(false);
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [skipping, setSkipping] = useState(false);
+
+  // Penalty tasks and shared/buddy tasks can never skip proof — that's the
+  // entire point of those task types. Every other task lets the person
+  // decide in the moment, right here, instead of that choice being locked
+  // in back when the task was created.
+  const canSkip = task ? !task.isPenaltyTask && !task.sharedGroupId : false;
 
   function reset() {
     setFile(null);
     setText("");
     setDragOver(false);
+  }
+
+  async function handleSkip() {
+    if (!task) return;
+    setSkipping(true);
+    const res = await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "COMPLETED" }),
+    });
+    setSkipping(false);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.error ?? "Couldn't complete task");
+      return;
+    }
+
+    const data = await res.json();
+    for (const key of data.newBadges ?? []) {
+      const badge = BADGE_CATALOG[key as BadgeKey];
+      if (badge) toast(`🏅 Badge earned: ${badge.label}`, { description: badge.description });
+    }
+    onCompleted({ ...task, ...data });
+    reset();
+    onOpenChange(false);
   }
 
   function handleDrop(e: React.DragEvent<HTMLLabelElement>) {
@@ -105,8 +138,12 @@ export function ProofModal({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="text-lg">Verification Required: {task?.title}</DialogTitle>
-          <DialogDescription>Proof of execution is mandatory to check off this task.</DialogDescription>
+          <DialogTitle className="text-lg">{canSkip ? "Complete task" : "Verification Required"}: {task?.title}</DialogTitle>
+          <DialogDescription>
+            {canSkip
+              ? "Attach proof below, or mark it done without any — your call."
+              : "Proof of execution is mandatory to check off this task."}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
@@ -173,10 +210,15 @@ export function ProofModal({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting || skipping}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={submitting}>
+          {canSkip && (
+            <Button variant="ghost" onClick={handleSkip} disabled={submitting || skipping}>
+              {skipping && <Spinner />} {skipping ? "Completing..." : "Mark done — no proof"}
+            </Button>
+          )}
+          <Button onClick={handleSubmit} disabled={submitting || skipping}>
             {submitting && <Spinner />} {submitting ? "Verifying..." : "Verify & Complete"}
           </Button>
         </DialogFooter>

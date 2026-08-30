@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Check, Pencil, Clock3, Link2, FileText, Target, Timer, FlaskConical, Tag, Users, Bell } from "lucide-react";
-import { BADGE_CATALOG, type BadgeKey } from "@/lib/badge-catalog";
 import { ProofModal } from "./proof-modal";
 import { EditTaskModal } from "./edit-task-modal";
 import { SnoozeModal } from "./snooze-modal";
@@ -93,7 +92,6 @@ export function TaskList({
   const [proofTask, setProofTask] = useState<TaskWithProofs | null>(null);
   const [editTask, setEditTask] = useState<TaskWithProofs | null>(null);
   const [snoozeTask, setSnoozeTask] = useState<TaskWithProofs | null>(null);
-  const [completingId, setCompletingId] = useState<string | null>(null);
   const msRemaining = useMsUntilMidnight();
   const isUrgent = msRemaining !== null && msRemaining < URGENT_THRESHOLD_MS;
 
@@ -105,36 +103,8 @@ export function TaskList({
     setTasks((prev) => prev.filter((t) => t.id !== id));
   }
 
-  async function completeWithoutProof(task: TaskWithProofs) {
-    setCompletingId(task.id);
-    const res = await fetch(`/api/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "COMPLETED" }),
-    });
-    setCompletingId(null);
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      toast.error(data.error ?? "Couldn't complete task");
-      return;
-    }
-
-    const data = await res.json();
-    updateTask({ ...task, ...data });
-    toast.success("Nice work. Logged for today.");
-    for (const key of data.newBadges ?? []) {
-      const badge = BADGE_CATALOG[key as BadgeKey];
-      if (badge) toast(`🏅 Badge earned: ${badge.label}`, { description: badge.description });
-    }
-  }
-
   function handleCheckboxClick(task: TaskWithProofs) {
-    if (task.proofRequired) {
-      setProofTask(task);
-    } else {
-      completeWithoutProof(task);
-    }
+    setProofTask(task);
   }
 
   async function remindPartner(buddyUserId: string) {
@@ -195,7 +165,7 @@ export function TaskList({
             <CardContent className="flex flex-wrap items-start gap-3 p-4">
               <button
                 type="button"
-                disabled={isDone || isFailed || isPendingAssignment || isPendingPartner || completingId === task.id}
+                disabled={isDone || isFailed || isPendingAssignment || isPendingPartner}
                 onClick={() => handleCheckboxClick(task)}
                 aria-label={
                   isDone

@@ -44,13 +44,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     data.status = "POSTPONED";
     data.lastSnoozedAt = new Date();
   }
-  // Completing a task with no proof required — normal (proof-required)
-  // completion only ever happens through app/api/tasks/[id]/proof/route.ts;
-  // this path exists specifically for tasks created with proofRequired:false
-  // (see components/dashboard/task-list.tsx's checkbox handler).
+  // Completing a task by skipping proof — chosen in the moment from the
+  // Proof Modal (see components/dashboard/proof-modal.tsx), not decided at
+  // task creation. Real (proof-submitted) completion always goes through
+  // app/api/tasks/[id]/proof/route.ts instead. Penalty tasks and shared/
+  // buddy tasks can never skip — that's the whole point of those task
+  // types, so this path is blocked for both regardless of what the client
+  // sends.
   let newBadges: string[] = [];
   if (status === "COMPLETED" && scheduledDate === undefined) {
-    if (existing.proofRequired) {
+    if (existing.isPenaltyTask || existing.sharedGroupId) {
       return NextResponse.json({ error: "This task requires proof to complete." }, { status: 400 });
     }
     if (existing.status !== "PENDING" && existing.status !== "POSTPONED") {

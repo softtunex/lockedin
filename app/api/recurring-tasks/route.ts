@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  const { title, description, schedule, startDate, notificationTime, category, proofRequired } = parsed.data;
+  const { title, description, schedule, startDate, notificationTime, category } = parsed.data;
 
   const template = await prisma.recurringTaskTemplate.create({
     data: {
@@ -38,7 +38,6 @@ export async function POST(request: Request) {
       anchorDate: startDate ? dayStart(startDate) : dayStart(new Date()),
       notificationTime,
       category,
-      proofRequired,
     },
   });
 
