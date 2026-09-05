@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { registerSchema } from "@/lib/validations";
 import { safeJson } from "@/lib/api";
+import { sendNotificationEmail } from "@/lib/email";
 
 export async function POST(request: Request) {
   const body = await safeJson(request);
@@ -23,6 +24,14 @@ export async function POST(request: Request) {
 
   const user = await prisma.user.create({
     data: { name, email, passwordHash },
+  });
+
+  await sendNotificationEmail({
+    to: user.email,
+    heading: `Welcome to LockedIn, ${user.name.split(" ")[0]}`,
+    body: "You're in. LockedIn keeps you honest with proof-of-work, real consequences for missed tasks, and an accountability buddy watching your back. Finish onboarding to set your penalty preference and start your first day.",
+    ctaLabel: "Finish setup",
+    ctaUrl: "/onboarding",
   });
 
   return NextResponse.json({ id: user.id, email: user.email });

@@ -6,6 +6,7 @@ import { proofSubmitSchema } from "@/lib/validations";
 import { safeJson } from "@/lib/api";
 import { checkAndAwardBadges } from "@/lib/badges";
 import { sendPushToUser } from "@/lib/push";
+import { notifyUser } from "@/lib/notify";
 import { getBuddyIds } from "@/lib/buddy";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -119,7 +120,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (siblingTask) {
     if (myNewStatus === "PENDING_PARTNER") {
-      await sendPushToUser(siblingTask.userId, {
+      await notifyUser(siblingTask.userId, {
         title: "Your turn on your shared task",
         body: `${submitter?.name} submitted their part of "${task.title}" — you're up.`,
         url: "/dashboard",
@@ -129,13 +130,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         where: { userId: siblingTask.userId, status: "COMPLETED" },
       });
       await checkAndAwardBadges(siblingTask.userId, { completedTaskCount: partnerCompletedCount, comeback: false });
-      await sendPushToUser(siblingTask.userId, {
+      await notifyUser(siblingTask.userId, {
         title: "Shared task complete!",
         body: `You and ${submitter?.name} both finished "${task.title}".`,
         url: "/dashboard",
       });
     } else {
-      await sendPushToUser(siblingTask.userId, {
+      await notifyUser(siblingTask.userId, {
         title: "Partner completed the shared task",
         body: `${submitter?.name} completed their part of "${task.title}".`,
         url: "/dashboard",

@@ -6,7 +6,7 @@ import { dayStart } from "@/lib/date";
 import { safeJson } from "@/lib/api";
 import { getUnresolvedMandatoryPenalty } from "@/lib/session";
 import { getBuddyIds } from "@/lib/buddy";
-import { sendPushToUser } from "@/lib/push";
+import { notifyUser } from "@/lib/notify";
 
 // Co-op/Shared Task: creates two normal, single-owner DailyTask rows (one
 // per partner) linked by a new SharedTaskGroup — see prisma/schema.prisma
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
   });
 
   const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true } });
-  await sendPushToUser(buddyUserId, {
+  await notifyUser(buddyUserId, {
     title: "New shared task",
     body: `${me?.name} added a shared task with you: "${title}"`,
     url: "/dashboard",

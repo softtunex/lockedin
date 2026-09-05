@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { sendPushToUser } from "@/lib/push";
+import { notifyUser } from "@/lib/notify";
 import { getBuddyIds } from "@/lib/buddy";
 import { safeJson } from "@/lib/api";
 
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
   const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true } });
 
-  await sendPushToUser(buddyUserId, {
+  await notifyUser(buddyUserId, {
     title: "Nudge",
     body: `${user?.name} nudged you to get back on track.`,
     url: "/dashboard",

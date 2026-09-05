@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { assignPenaltyTaskSchema } from "@/lib/validations";
 import { safeJson } from "@/lib/api";
-import { sendPushToUser } from "@/lib/push";
+import { notifyUser } from "@/lib/notify";
 import { getBuddyIds } from "@/lib/buddy";
 
 // A Buddy-Assigned Penalty Task starts as a placeholder (status
@@ -41,7 +41,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   });
 
   const assigner = await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true } });
-  await sendPushToUser(task.userId, {
+  await notifyUser(task.userId, {
     title: "Your penalty task was assigned",
     body: `${assigner?.name} assigned you: "${parsed.data.title}"`,
     url: "/dashboard",

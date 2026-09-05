@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { emergencyPassActionSchema } from "@/lib/validations";
 import { safeJson } from "@/lib/api";
-import { sendPushToUser } from "@/lib/push";
+import { notifyUser } from "@/lib/notify";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -36,7 +36,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   ]);
 
   const reviewer = await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true } });
-  await sendPushToUser(use.userId, {
+  await notifyUser(use.userId, {
     title: approve ? "Emergency pass approved" : "Emergency pass declined",
     body: approve
       ? `${reviewer?.name} excused your task — no penalty today.`

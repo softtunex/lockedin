@@ -1,7 +1,7 @@
 import "dotenv/config";
 import cron from "node-cron";
 import { runEodSweep } from "../lib/penalty-engine";
-import { sendPendingTaskReminders } from "../lib/push";
+import { sendPendingTaskReminders } from "../lib/notify";
 import { checkTestDeadlines } from "../lib/test-deadlines";
 
 // Local stand-in for Vercel Cron / Upstash QStash: runs the same

@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buddyInviteActionSchema } from "@/lib/validations";
 import { safeJson } from "@/lib/api";
-import { sendPushToUser } from "@/lib/push";
+import { notifyUser } from "@/lib/notify";
 import { pairUsers } from "@/lib/buddy";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -60,7 +60,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     data: { status: "ACCEPTED", respondedAt: new Date(), toUserId: session.user.id },
   });
 
-  await sendPushToUser(invite.fromUserId, {
+  await notifyUser(invite.fromUserId, {
     title: "Buddy request accepted",
     body: `${me?.name} is now your accountability partner.`,
     url: "/buddy",

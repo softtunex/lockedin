@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { sendPushToUser } from "./push";
+import { notifyUser } from "./notify";
 
 // All active (unpairedAt: null) buddy pairs a user currently belongs to —
 // a user can appear as user1 or user2 across several rows, since multi-buddy
@@ -60,7 +60,7 @@ export async function notifyBuddyOfFailure(user: { id: string; name: string }, t
   const buddyIds = await getBuddyIds(user.id);
   await Promise.all(
     buddyIds.map((buddyId) =>
-      sendPushToUser(buddyId, {
+      notifyUser(buddyId, {
         title: "Buddy alert",
         body: `${user.name} missed "${taskTitle}" and was penalized.`,
         url: "/buddy",

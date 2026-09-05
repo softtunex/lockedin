@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sendPendingTaskReminders } from "@/lib/push";
+import { sendPendingTaskReminders } from "@/lib/notify";
 
 // Suitable as a GitHub Actions / Vercel Cron target — call every few
 // minutes. Matches each user's configured reminder time against the

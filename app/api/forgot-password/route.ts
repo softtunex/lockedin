@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { forgotPasswordSchema } from "@/lib/validations";
 import { safeJson } from "@/lib/api";
-import { sendEmail } from "@/lib/email";
+import { sendNotificationEmail } from "@/lib/email";
 
 const GENERIC_MESSAGE = "If an account exists for that email, we've sent a reset link.";
 
@@ -23,10 +23,12 @@ export async function POST(request: Request) {
       data: { userId: user.id, token, expiresAt: new Date(Date.now() + 60 * 60 * 1000) },
     });
 
-    await sendEmail({
+    await sendNotificationEmail({
       to: user.email,
-      subject: "Reset your LockedIn password",
-      body: `Reset your password: ${process.env.NEXTAUTH_URL}/reset-password/${token}\n\nThis link expires in 1 hour.`,
+      heading: "Reset your LockedIn password",
+      body: "We got a request to reset your password. This link expires in 1 hour — if you didn't ask for this, you can safely ignore this email.",
+      ctaLabel: "Reset password",
+      ctaUrl: `/reset-password/${token}`,
     });
   }
 

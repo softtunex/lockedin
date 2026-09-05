@@ -4,7 +4,7 @@ import { PENALTY_TASK_BANK, type PenaltyType } from "./enums";
 import { debitWallet, creditWallet } from "./wallet";
 import { checkAndAwardBadges } from "./badges";
 import { notifyBuddyOfFailure, getBuddyIds } from "./buddy";
-import { sendPushToUser } from "./push";
+import { notifyUser } from "./notify";
 import { addDays } from "date-fns";
 import type { User } from "@/generated/prisma/client";
 
@@ -130,7 +130,7 @@ async function notifySharedPartnerOfDefault(
     where: { sharedGroupId, id: { not: failedTaskId } },
   });
   if (!sibling) return;
-  await sendPushToUser(sibling.userId, {
+  await notifyUser(sibling.userId, {
     title: "Partner defaulted on your shared task",
     body: `${failedUserName} missed "${taskTitle}" — your shared task with them wasn't completed together.`,
     url: "/dashboard",
@@ -178,7 +178,7 @@ async function createBuddyAssignedPenaltyTask(userId: string, userName: string) 
   const buddyIds = await getBuddyIds(userId);
   await Promise.all(
     buddyIds.map((buddyId) =>
-      sendPushToUser(buddyId, {
+      notifyUser(buddyId, {
         title: "Assign a penalty task",
         body: `${userName} missed a task — write their penalty task to hold them accountable.`,
         url: "/buddy",

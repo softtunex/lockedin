@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { emergencyPassRequestSchema } from "@/lib/validations";
 import { safeJson } from "@/lib/api";
-import { sendPushToUser } from "@/lib/push";
+import { notifyUser } from "@/lib/notify";
 import { getBuddyIds } from "@/lib/buddy";
 
 const WEEKLY_PASS_LIMIT = 1;
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     data: { userId: session.user.id, buddyUserId: parsed.data.buddyUserId, dailyTaskId: task.id },
   });
 
-  await sendPushToUser(parsed.data.buddyUserId, {
+  await notifyUser(parsed.data.buddyUserId, {
     title: "Emergency pass requested",
     body: `${user?.name} is requesting an emergency pass for "${task.title}".`,
     url: "/buddy",

@@ -3,8 +3,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buddyRequestSchema } from "@/lib/validations";
 import { safeJson } from "@/lib/api";
-import { sendPushToUser } from "@/lib/push";
-import { sendEmail } from "@/lib/email";
+import { notifyUser } from "@/lib/notify";
+import { sendNotificationEmail } from "@/lib/email";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -28,24 +28,19 @@ export async function POST(request: Request) {
   });
 
   if (toUserId) {
-    const recipient = await prisma.user.findUnique({ where: { id: toUserId }, select: { email: true } });
-    await sendPushToUser(toUserId, {
+    await notifyUser(toUserId, {
       title: "LockedIn Buddy Request",
       body: `${sender?.name} wants to be your accountability partner.`,
       url: "/buddy",
+      ctaLabel: "Review request",
     });
-    if (recipient?.email) {
-      await sendEmail({
-        to: recipient.email,
-        subject: `${sender?.name} invited you to be their accountability partner`,
-        body: `${sender?.name} wants to pair up on LockedIn. Open the app and check your Buddy Hub to accept: ${process.env.NEXTAUTH_URL}/buddy`,
-      });
-    }
   } else if (toEmail) {
-    await sendEmail({
+    await sendNotificationEmail({
       to: toEmail,
-      subject: `${sender?.name} invited you to be their accountability partner`,
-      body: `Join LockedIn and pair up: /invite/${invite.inviteCode}`,
+      heading: `${sender?.name} invited you to be their accountability partner`,
+      body: `${sender?.name} wants to pair up on LockedIn — a strict to-do app that keeps you honest with proof-of-work and real consequences for missed tasks.`,
+      ctaLabel: "Accept invite",
+      ctaUrl: `/invite/${invite.inviteCode}`,
     });
   }
 
